@@ -20,14 +20,47 @@
       image-rendering: crisp-edges;
     }
     h1 {
-      margin: 0 0 12px;
+      margin: 0 0 8px;
       font-size: 14px;
       font-weight: normal;
       letter-spacing: 2px;
       color: #38b764;
       text-shadow: 2px 2px 0 #0d2818;
     }
-    #wrap {
+    #hud {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 16px;
+      font-size: 11px;
+      margin-bottom: 8px;
+      min-width: 320px;
+      color: #cbd5e1;
+    }
+    #hud span.val { color: #fbbf24; }
+    #hud span.dim { color: #64748b; }
+    .row-tools {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      font-size: 11px;
+      min-width: 320px;
+    }
+    .row-tools label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      user-select: none;
+      color: #a7f3d0;
+    }
+    .row-tools input[type="checkbox"] {
+      accent-color: #38b764;
+      width: 14px;
+      height: 14px;
+    }
+    #gameFrame {
       padding: 12px;
       background: #0f0f1a;
       border: 4px solid #3a4466;
@@ -40,11 +73,35 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
     }
+    .touch {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 10px;
+      max-width: 200px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .touch button {
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 0;
+      border: 2px solid #3a4466;
+      background: #1a1c2e;
+      color: #e2e8f0;
+      cursor: pointer;
+      box-shadow: 2px 2px 0 #000;
+    }
+    .touch button:active {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 #000;
+    }
+    .touch .blank { visibility: hidden; pointer-events: none; }
     p {
       margin: 12px 0 0;
       font-size: 11px;
       text-align: center;
-      max-width: 360px;
+      max-width: 400px;
       line-height: 1.5;
     }
     kbd {
@@ -58,10 +115,34 @@
 </head>
 <body>
   <h1>SNAKE</h1>
-  <div id="wrap">
+  <div id="hud">
+    <div>分数 <span class="val" id="score">0</span></div>
+    <div>最高分 <span class="val" id="hi">0</span></div>
+    <div>等级 <span class="val" id="lvl">1</span> <span class="dim" id="spd"></span></div>
+    <div>状态 <span class="val" id="state">进行中</span></div>
+  </div>
+  <div class="row-tools">
+    <label><input type="checkbox" id="chkWrap" /> 穿墙模式</label>
+    <label><input type="checkbox" id="mute" checked /> 静音</label>
+  </div>
+  <div id="gameFrame">
     <canvas id="c" width="320" height="320"></canvas>
   </div>
-  <p>方向键移动 · 吃到红块变长 · 撞墙或撞到自己后，再按一次方向键重新开始</p>
+  <div class="touch" aria-label="方向">
+    <span class="blank"></span>
+    <button type="button" data-dy="-1" data-dx="0">上</button>
+    <span class="blank"></span>
+    <button type="button" data-dy="0" data-dx="-1">左</button>
+    <button type="button" data-dy="0" data-dx="0" id="btnPause">停</button>
+    <button type="button" data-dy="0" data-dx="1">右</button>
+    <span class="blank"></span>
+    <button type="button" data-dy="1" data-dx="0">下</button>
+    <span class="blank"></span>
+  </div>
+  <p>
+    <kbd>方向键</kbd>移动 · <kbd>空格</kbd>暂停/继续 · 死后 <kbd>R</kbd> / <kbd>空格</kbd> / 方向键 重新开始<br />
+    普通食物 +10 分；<b style="color:#f7b500">金色食物</b>限时，+40 分 · 每吃 5 个食物升一级，速度变快
+  </p>
   <script>
     (function () {
       const canvas = document.getElementById("c");
@@ -71,6 +152,7 @@
       const CELL = 16;
       const W = canvas.width / CELL;
       const H = canvas.height / CELL;
+      const HS_KEY = "snake_px_high_v2";
 
       const COL = {
         bg: "#1a1c2e",
@@ -78,10 +160,69 @@
         snake: "#38b764",
         snakeHead: "#6dfc8a",
         food: "#ff0044",
+        foodGold: "#f7b500",
+        foodGoldPulse: "#ffe08a",
         dead: "#5c5f72",
       };
 
-      let snake, dir, nextDir, food, alive, tick;
+      const el = {
+        score: document.getElementById("score"),
+        hi: document.getElementById("hi"),
+        lvl: document.getElementById("lvl"),
+        spd: document.getElementById("spd"),
+        state: document.getElementById("state"),
+        mute: document.getElementById("mute"),
+      };
+      const chkWrap = document.getElementById("chkWrap");
+      const chkMute = document.getElementById("mute");
+
+      let snake,
+        dir,
+        nextDir,
+        food,
+        foodGold,
+        foodTicks,
+        alive,
+        paused,
+        tick,
+        score,
+        eaten,
+        high;
+
+      let audioCtx;
+
+      function loadHigh() {
+        const n = parseInt(localStorage.getItem(HS_KEY) || "0", 10);
+        return Number.isFinite(n) ? n : 0;
+      }
+
+      function saveHigh(v) {
+        localStorage.setItem(HS_KEY, String(v));
+      }
+
+      function beep(freq, dur, vol) {
+        if (chkMute.checked) return;
+        try {
+          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = "square";
+          o.frequency.value = freq;
+          g.gain.value = vol;
+          o.connect(g);
+          g.connect(audioCtx.destination);
+          const t0 = audioCtx.currentTime;
+          g.gain.setValueAtTime(vol, t0);
+          g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+          o.start(t0);
+          o.stop(t0 + dur + 0.02);
+        } catch (_) {}
+      }
+
+      function intervalMs() {
+        const lvl = 1 + Math.floor(eaten / 5);
+        return Math.max(52, 128 - lvl * 10);
+      }
 
       function randCell() {
         return {
@@ -95,7 +236,10 @@
         do {
           p = randCell();
         } while (snake.some((s) => s.x === p.x && s.y === p.y));
+
         food = p;
+        foodGold = Math.random() < 0.22;
+        foodTicks = foodGold ? 72 : 0;
       }
 
       function reset() {
@@ -109,13 +253,58 @@
         dir = { x: 1, y: 0 };
         nextDir = { ...dir };
         alive = true;
+        paused = false;
         tick = 0;
+        score = 0;
+        eaten = 0;
+        high = loadHigh();
         spawnFood();
+        syncHud();
+      }
+
+      function syncHud() {
+        el.score.textContent = String(score);
+        el.hi.textContent = String(Math.max(high, score));
+        const lvl = 1 + Math.floor(eaten / 5);
+        el.lvl.textContent = String(lvl);
+        el.spd.textContent = "(间隔 " + intervalMs() + "ms)";
+        if (!alive) el.state.textContent = "结束";
+        else if (paused) el.state.textContent = "暂停";
+        else el.state.textContent = "进行中";
+      }
+
+      function trySetDir(dx, dy) {
+        if (dx === 0 && dy === 0) return;
+        if (!alive) {
+          reset();
+          return;
+        }
+        if (paused) {
+          paused = false;
+          syncHud();
+        }
+        if (dy === -1 && dir.y === 0) nextDir = { x: 0, y: -1 };
+        if (dy === 1 && dir.y === 0) nextDir = { x: 0, y: 1 };
+        if (dx === -1 && dir.x === 0) nextDir = { x: -1, y: 0 };
+        if (dx === 1 && dir.x === 0) nextDir = { x: 1, y: 0 };
       }
 
       function drawCell(x, y, color) {
         ctx.fillStyle = color;
         ctx.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+      }
+
+      function drawOverlay(lines, color) {
+        ctx.fillStyle = "rgba(15, 15, 26, 0.72)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = "bold 18px monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = color;
+        const cy = canvas.height / 2 - (lines.length - 1) * 12;
+        lines.forEach((t, i) => {
+          ctx.fillText(t, canvas.width / 2, cy + i * 24);
+        });
       }
 
       function draw() {
@@ -129,9 +318,13 @@
           }
         }
 
-        drawCell(food.x, food.y, COL.food);
+        if (foodGold) {
+          const pulse = foodTicks % 8 < 4;
+          drawCell(food.x, food.y, pulse ? COL.foodGoldPulse : COL.foodGold);
+        } else {
+          drawCell(food.x, food.y, COL.food);
+        }
 
-        const head = snake[0];
         for (let i = 0; i < snake.length; i++) {
           const s = snake[i];
           const c =
@@ -144,50 +337,120 @@
                 : COL.dead;
           drawCell(s.x, s.y, c);
         }
+
+        if (paused && alive) {
+          drawOverlay(["暂停", "空格继续"], "#a7f3d0");
+        } else if (!alive) {
+          drawOverlay(["游戏结束", "R / 空格 / 方向键 重开"], "#fca5a5");
+        }
       }
 
       function step() {
-        if (!alive) return;
+        if (!alive || paused) return;
+
+        if (foodGold && foodTicks > 0) {
+          foodTicks -= 1;
+          if (foodTicks <= 0) {
+            spawnFood();
+            beep(120, 0.05, 0.03);
+          }
+        }
 
         dir = nextDir;
-        const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+        let nx = snake[0].x + dir.x;
+        let ny = snake[0].y + dir.y;
 
-        if (head.x < 0 || head.x >= W || head.y < 0 || head.y >= H) {
-          alive = false;
+        if (chkWrap.checked) {
+          nx = ((nx % W) + W) % W;
+          ny = ((ny % H) + H) % H;
+        } else if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
+          die();
           return;
         }
+
+        const head = { x: nx, y: ny };
         if (snake.some((s) => s.x === head.x && s.y === head.y)) {
-          alive = false;
+          die();
           return;
         }
 
         snake.unshift(head);
 
         if (head.x === food.x && head.y === food.y) {
+          eaten += 1;
+          if (foodGold) {
+            score += 40;
+            beep(660, 0.06, 0.04);
+          } else {
+            score += 10;
+            beep(420, 0.05, 0.035);
+          }
           spawnFood();
         } else {
           snake.pop();
         }
+
+        if (score > high) {
+          high = score;
+          saveHigh(high);
+        }
+        syncHud();
+      }
+
+      function die() {
+        alive = false;
+        beep(140, 0.12, 0.05);
+        syncHud();
       }
 
       document.addEventListener("keydown", (e) => {
         const k = e.key;
-        if (k === "ArrowUp" && dir.y === 0) nextDir = { x: 0, y: -1 };
-        if (k === "ArrowDown" && dir.y === 0) nextDir = { x: 0, y: 1 };
-        if (k === "ArrowLeft" && dir.x === 0) nextDir = { x: -1, y: 0 };
-        if (k === "ArrowRight" && dir.x === 0) nextDir = { x: 1, y: 0 };
-        if (!alive && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(k)) {
-          reset();
+        if (k === " " || k === "Spacebar") {
+          e.preventDefault();
+          if (!alive) {
+            reset();
+            return;
+          }
+          paused = !paused;
+          syncHud();
+          return;
         }
+        if ((k === "r" || k === "R") && !alive) {
+          reset();
+          e.preventDefault();
+          return;
+        }
+        if (k === "ArrowUp") trySetDir(0, -1);
+        if (k === "ArrowDown") trySetDir(0, 1);
+        if (k === "ArrowLeft") trySetDir(-1, 0);
+        if (k === "ArrowRight") trySetDir(1, 0);
         e.preventDefault();
       });
 
+      document.querySelectorAll(".touch button[data-dx]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const dx = Number(btn.getAttribute("data-dx"));
+          const dy = Number(btn.getAttribute("data-dy"));
+          if (btn.id === "btnPause") {
+            if (!alive) {
+              reset();
+              return;
+            }
+            paused = !paused;
+            syncHud();
+            return;
+          }
+          trySetDir(dx, dy);
+        });
+      });
+
       function loop(ts) {
-        if (alive) {
+        if (alive && !paused) {
           tick += ts - (loop.prev || ts);
           loop.prev = ts;
-          while (tick > 110) {
-            tick -= 110;
+          const ms = intervalMs();
+          while (tick > ms) {
+            tick -= ms;
             step();
           }
         } else {
@@ -197,6 +460,8 @@
         requestAnimationFrame(loop);
       }
 
+      high = loadHigh();
+      el.hi.textContent = String(high);
       reset();
       requestAnimationFrame(loop);
     })();
