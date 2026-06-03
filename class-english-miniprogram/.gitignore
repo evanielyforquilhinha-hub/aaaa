@@ -1,0 +1,7 @@
+node_modules/
+dist/
+_unused/
+*.log
+.DS_Store
+_w.py
+tmp_*.py

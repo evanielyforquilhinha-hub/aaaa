@@ -1,0 +1,103 @@
+// === Colors ===
+$primary-green: #34C759;
+$primary-orange: #FF9500;
+$primary-red: #FF3B30;
+
+// === Radius ===
+$radius-input: 12px;
+$radius-card: 16px;
+$radius-btn: 24px;
+
+// === Background ===
+$bg-gradient-start: #E6F7F5;
+$bg-gradient-end: #F5F9F7;
+$page-bg: #F5F5F7;
+$card-bg: rgba(255, 255, 255, 0.92);
+$white: #FFFFFF;
+
+// === Text ===
+$text-primary: #1D1D1F;
+$text-secondary: #8E8E93;
+$text-tertiary: #C7C7CC;
+$text-highlight: #FF6B35;
+
+// === Border ===
+$border-color: #E5E5EA;
+$divider-color: #C6C6C8;
+
+// === Compat aliases ===
+$color-green: $primary-green;
+$color-orange: $primary-orange;
+$color-red: $primary-red;
+$color-highlight: #E6F9EB;
+$color-text: $text-primary;
+$color-text-secondary: $text-secondary;
+$color-text-muted: $text-tertiary;
+$color-text-icon: $text-primary;
+$color-white: $white;
+$color-mask: rgba(0, 0, 0, 0.4);
+$color-handle: #E5E5EA;
+$color-surface-muted: #F5F5F7;
+$color-primary: $primary-green;
+$color-success: $primary-green;
+$color-bg: $page-bg;
+$color-card: $card-bg;
+$color-text-primary: $text-primary;
+$color-text-tertiary: $text-tertiary;
+$color-text-inverse: $white;
+
+// === Spacing ===
+$spacing-page: 20px;
+$spacing-paragraph: 28px;
+$radius-cover: 16px;
+$radius-sheet-top: 24px;
+$radius-sm: 8px;
+
+// === Typography ===
+$font-family-base: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+$font-size-title-lg: 36px;
+$font-size-word: 48px;
+$font-size-body: 16px;
+$font-size-secondary: 14px;
+$font-size-label: 12px;
+$font-weight-title: 600;
+$font-weight-word: 700;
+
+// === Animation ===
+$transition-fast: 150ms ease-out;
+$transition-normal: 0.3s ease-out;
+$transition-sheet: 200ms ease-out;
+
+@mixin tap-feedback {
+  transition: opacity $transition-normal, background-color $transition-normal, transform $transition-normal;
+  &:active { opacity: 0.72; transform: scale(0.97); }
+}
+
+@mixin safe-area-bottom($extra: 0) {
+  padding-bottom: calc(constant(safe-area-inset-bottom) + #{$extra});
+  padding-bottom: calc(env(safe-area-inset-bottom) + #{$extra});
+}
+
+// === Shadow ===
+@mixin card-shadow {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+// === Buttons ===
+@mixin btn-base {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: $radius-btn; font-weight: 600;
+  @include tap-feedback;
+}
+
+@mixin btn-primary {
+  @include btn-base;
+  background-color: $primary-green; color: $white;
+  &:active { background-color: #2AAF4C; }
+}
+
+@mixin btn-secondary {
+  @include btn-base;
+  background-color: $primary-orange; color: $white;
+  &:active { background-color: #E68600; }
+}
