@@ -27,10 +27,10 @@ export function splitSentences(text: string): string[] {
 export function parseParagraph(text: string): TextToken[] {
   if (!text) return []
   const tokens: TextToken[] = []
-  const regex = /([a-zA-Z]+|'[a.-zA-Z]+)|(\s+)|([^\sa-zA-Z]+)/g
+  const regex = /([a-zA-Z]+(?:['-][a-zA-Z]+)*)|(\s+)|([^\sa-zA-Z]+)/g
   let match
   while ((match = regex.exec(text)) !== null) {
-    if (match[1] || match[2]) {
+    if (match[1]) {
       // word
       const word = match[0]
       tokens.push({
@@ -38,10 +38,10 @@ export function parseParagraph(text: string): TextToken[] {
         text: word,
         normalized: word.toLowerCase().replace(/[^a-z']/g, ''),
       })
-    } else if (match[3]) {
+    } else if (match[2]) {
       // whitespace
       tokens.push({ type: 'space', text: match[0] })
-    } else if (match[4]) {
+    } else if (match[3]) {
       // punctuation
       tokens.push({ type: 'punctuation', text: match[0] })
     }

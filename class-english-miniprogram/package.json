@@ -25,6 +25,9 @@
                      },
     "scripts":  {
                     "dev:mp-weixin":  "uni -p mp-weixin",
-                    "build:mp-weixin":  "uni build -p mp-weixin"
+                    "build:mp-weixin":  "node scripts/build-mp-weixin.cjs",
+                    "build:mp-weixin:raw":  "uni build -p mp-weixin",
+                    "sync:mp-root":  "node scripts/sync-mp-root.cjs",
+                    "check:ui":  "node scripts/ui-smoke-check.cjs"
                 }
 }

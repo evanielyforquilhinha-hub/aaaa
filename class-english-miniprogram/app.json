@@ -1,0 +1,43 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/words/words",
+    "pages/me/me",
+    "pages/review/review",
+    "pages/word-detail/word-detail"
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "每日英语",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F5F7",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#8E8E93",
+    "selectedColor": "#34C759",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "iconPath": "static/tab/read.png",
+        "selectedIconPath": "static/tab/read-active.png",
+        "text": "阅读"
+      },
+      {
+        "pagePath": "pages/words/words",
+        "iconPath": "static/tab/word.png",
+        "selectedIconPath": "static/tab/word-active.png",
+        "text": "单词"
+      },
+      {
+        "pagePath": "pages/me/me",
+        "iconPath": "static/tab/me.png",
+        "selectedIconPath": "static/tab/me-active.png",
+        "text": "我的"
+      }
+    ]
+  },
+  "usingComponents": {}
+}

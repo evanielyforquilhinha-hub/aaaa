@@ -61,7 +61,18 @@ function playWord(word: string) {
 }
 
 function confirmRemove(id: string, word: string) {
-  uni.showModal({ title: '确认删除', content: `确定融生词本中删除《${word}」吗？`, success: (res) => { if (res.confirm) { removeWord(id); words.value = loadVocab(); todayReview.value = getTodayReviewWords(); if (words.value.length === 0) isEmpty.value = true } } })
+  uni.showModal({
+    title: '确认删除',
+    content: `确定从生词本中删除「${word}」吗？`,
+    success: (res) => {
+      if (res.confirm) {
+        removeWord(id)
+        words.value = loadVocab()
+        todayReview.value = getTodayReviewWords()
+        if (words.value.length === 0) isEmpty.value = true
+      }
+    },
+  })
 }
 
 const searchQuery = ref('')
@@ -71,7 +82,9 @@ const filteredWords = computed(() => {
   return words.value.filter(w => w.word.toLowerCase().includes(q) || w.meaning.includes(q))
 })
 
-function getFamiliarityStars(f: number): string { return new Array(f+1).join("u2605") + new Array(6-f).join("u2606") }
+function getFamiliarityStars(f: number): string {
+  return new Array(f + 1).join('★') + new Array(6 - f).join('☆')
+}
 
 onMounted(() => {
   const info = uni.getSystemInfoSync()
@@ -85,7 +98,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <view style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;font-size:120px;font-weight:900;color:#FF3B30;">1</view>
   <view class="vocab-page">
     <view class="nav-bar" :style="{ paddingTop: `${statusBarHeight}px` }">
       <view class="nav-bar__inner">
@@ -96,8 +108,8 @@ onUnmounted(() => {
     <scroll-view class="vocab-scroll" scroll-y :style="{ paddingTop: `${statusBarHeight + 50}px`, height: `calc(100vh - ${statusBarHeight + 50}px)` }">
       <view v-if="isEmpty" class="empty-state">
         <view class="empty-state__icon"><text class="empty-state__icon-text">W</text></view>
-        <text class="empty-state__title">生词本还是空能</text>
-        <text class="empty-state__desc">Yl��阵郭中点击单词，加入到生词本吧</text>
+        <text class="empty-state__title">生词本还是空的</text>
+        <text class="empty-state__desc">在阅读中点击单词，就能加入到生词本。</text>
       </view>
 
       <view v-else-if="!reviewSessionDone && todayReview.length > 0" class="review-session">
@@ -113,7 +125,7 @@ onUnmounted(() => {
           <view class="flashcard__inner">
             <view class="flashcard__front">
               <text class="flashcard__word">{{ currentCard?.word }}</text>
-              <text class="flashcard__hint">点击显示介义</text>
+              <text class="flashcard__hint">点击显示释义</text>
             </view>
             <view class="flashcard__back">
               <view class="flashcard__back-header">
@@ -129,7 +141,7 @@ onUnmounted(() => {
               <text class="flashcard__phonetic">{{ currentCard?.phonetic }}</text>
               <text class="flashcard__meaning">{{ currentCard?.partOfSpeech }} {{ currentCard?.meaning }}</text>
               <view class="flashcard__example-section">
-                <text class="flashcard__example-label">侊句</text>
+                <text class="flashcard__example-label">例句</text>
                 <text class="flashcard__example-en">{{ currentCard?.example }}</text>
                 <text class="flashcard__example-zh">{{ currentCard?.exampleTranslation }}</text>
               </view>

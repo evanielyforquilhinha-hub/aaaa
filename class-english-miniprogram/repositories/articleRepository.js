@@ -1,0 +1,1 @@
+"use strict";const t=require("../features/reader/articles.js");exports.getArticleByIndex=function(e){const r=Math.max(0,Math.min(e,t.articles.length-1));return t.articles[r]},exports.listArticles=function(){return t.articles};

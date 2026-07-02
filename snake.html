@@ -2,469 +2,631 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>像素贪吃蛇</title>
   <style>
-    * { box-sizing: border-box; }
+    :root {
+      --bg: #0c1020;
+      --panel: #141a2e;
+      --line: #2d3a5c;
+      --green: #3dff7a;
+      --green-dim: #1a9e4a;
+      --gold: #ffd54a;
+      --red: #ff3d6e;
+      --blue: #5ecbff;
+      --text: #e8edf8;
+      --muted: #7a8aaa;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      margin: 0;
       min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at 50% 0%, #1a2548 0%, transparent 55%),
+        var(--bg);
+      font-family: "Courier New", Consolas, monospace;
+      color: var(--text);
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #shell {
+      width: min(96vw, 480px);
+      padding: 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    header h1 {
+      font-size: 22px;
+      letter-spacing: 6px;
+      color: var(--green);
+      text-shadow: 0 0 16px rgba(61, 255, 122, 0.35), 3px 3px 0 #000;
+    }
+    header p {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 2px;
+    }
+    #hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .chip {
+      background: var(--panel);
+      border: 2px solid var(--line);
+      padding: 8px 6px;
+      text-align: center;
+      box-shadow: 3px 3px 0 #000;
+    }
+    .chip label {
+      display: block;
+      font-size: 9px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .chip span {
+      font-size: 15px;
+      color: var(--gold);
+    }
+    #frame {
+      position: relative;
+      background: var(--panel);
+      border: 4px solid var(--line);
+      padding: 8px;
+      box-shadow: 6px 6px 0 #000, inset 0 0 0 2px #0a0e18;
+    }
+    #frame.shake { animation: shake 0.3s ease; }
+    @keyframes shake {
+      0%, 100% { transform: translate(0); }
+      25% { transform: translate(-3px, 2px); }
+      75% { transform: translate(3px, -2px); }
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #080c14;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .scan {
+      pointer-events: none;
+      position: absolute;
+      inset: 8px;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent 0 2px,
+        rgba(0, 0, 0, 0.12) 2px 4px
+      );
+      opacity: 0.5;
+    }
+  #pop {
+      position: absolute;
+      left: 50%;
+      top: 46%;
+      transform: translate(-50%, -50%);
+      font-size: 20px;
+      color: var(--gold);
+      text-shadow: 0 0 12px var(--gold);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 3;
+    }
+    #pop.show { animation: pop 0.55s ease forwards; }
+    @keyframes pop {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+      30% { opacity: 1; transform: translate(-50%, -60%) scale(1.1); }
+      100% { opacity: 0; transform: translate(-50%, -80%) scale(1); }
+    }
+    #overlay {
+      position: absolute;
+      inset: 8px;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: #1a1c2e;
-      font-family: "Courier New", Consolas, monospace;
-      color: #94a3b8;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
+      background: rgba(6, 9, 16, 0.88);
+      text-align: center;
+      padding: 20px;
+      z-index: 5;
     }
-    h1 {
-      margin: 0 0 8px;
-      font-size: 14px;
-      font-weight: normal;
-      letter-spacing: 2px;
-      color: #38b764;
-      text-shadow: 2px 2px 0 #0d2818;
+    #overlay h2 {
+      font-size: 20px;
+      color: var(--green);
+      margin-bottom: 10px;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(61, 255, 122, 0.4);
     }
-    #hud {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px 16px;
+    #overlay p {
       font-size: 11px;
-      margin-bottom: 8px;
-      min-width: 320px;
-      color: #cbd5e1;
+      line-height: 1.8;
+      color: var(--muted);
+      max-width: 280px;
+      margin-bottom: 16px;
     }
-    #hud span.val { color: #fbbf24; }
-    #hud span.dim { color: #64748b; }
-    .row-tools {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 8px;
-      font-size: 11px;
-      min-width: 320px;
-    }
-    .row-tools label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .btn {
+      font: inherit;
+      font-size: 12px;
+      padding: 10px 20px;
+      border: 2px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
       cursor: pointer;
-      user-select: none;
-      color: #a7f3d0;
+      box-shadow: 3px 3px 0 #000;
+      margin: 4px;
     }
-    .row-tools input[type="checkbox"] {
-      accent-color: #38b764;
-      width: 14px;
-      height: 14px;
-    }
-    #gameFrame {
-      padding: 12px;
-      background: #0f0f1a;
-      border: 4px solid #3a4466;
-      box-shadow:
-        inset 0 0 0 2px #1a1c2e,
-        4px 4px 0 #000;
-    }
-    canvas {
-      display: block;
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
+    .btn:hover { border-color: var(--green); color: var(--green); }
+    .btn:active { transform: translate(1px, 1px); box-shadow: 2px 2px 0 #000; }
+    .btn.main { border-color: var(--green); color: var(--green); }
     .touch {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-      margin-top: 10px;
-      max-width: 200px;
+      gap: 8px;
+      margin-top: 12px;
+      max-width: 220px;
       margin-left: auto;
       margin-right: auto;
     }
     .touch button {
-      font-family: inherit;
-      font-size: 14px;
-      padding: 10px 0;
-      border: 2px solid #3a4466;
-      background: #1a1c2e;
-      color: #e2e8f0;
-      cursor: pointer;
+      font: inherit;
+      padding: 14px 0;
+      border: 2px solid var(--line);
+      background: var(--panel);
+      color: #fff;
       box-shadow: 2px 2px 0 #000;
     }
-    .touch button:active {
-      transform: translate(1px, 1px);
-      box-shadow: 1px 1px 0 #000;
-    }
-    .touch .blank { visibility: hidden; pointer-events: none; }
-    p {
-      margin: 12px 0 0;
-      font-size: 11px;
+    .touch .gap { visibility: hidden; }
+    footer {
+      margin-top: 12px;
       text-align: center;
-      max-width: 400px;
-      line-height: 1.5;
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.7;
     }
     kbd {
-      display: inline-block;
+      border: 1px solid var(--line);
       padding: 1px 5px;
-      border: 1px solid #3a4466;
-      background: #0f0f1a;
-      color: #a7f3d0;
+      background: #0a0e18;
+      color: var(--blue);
+    }
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-size: 10px;
+    }
+    .legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 4px;
+      vertical-align: middle;
     }
   </style>
 </head>
 <body>
-  <h1>SNAKE</h1>
-  <div id="hud">
-    <div>分数 <span class="val" id="score">0</span></div>
-    <div>最高分 <span class="val" id="hi">0</span></div>
-    <div>等级 <span class="val" id="lvl">1</span> <span class="dim" id="spd"></span></div>
-    <div>状态 <span class="val" id="state">进行中</span></div>
+  <div id="shell">
+    <header>
+      <h1>像素贪吃蛇</h1>
+      <p>PIXEL SNAKE · DEMO</p>
+    </header>
+
+    <div id="hud">
+      <div class="chip"><label>分数</label><span id="score">0</span></div>
+      <div class="chip"><label>最高</label><span id="best">0</span></div>
+      <div class="chip"><label>连击</label><span id="combo">x1</span></div>
+      <div class="chip"><label>等级</label><span id="level">1</span></div>
+    </div>
+
+    <div id="frame">
+      <canvas id="c" width="352" height="352"></canvas>
+      <div class="scan"></div>
+      <div id="pop"></div>
+      <div id="overlay">
+        <h2 id="ovTitle">准备开始</h2>
+        <p id="ovBody">收集食物、叠加连击、躲避毒菇。<br>按空格或点击下方按钮开始。</p>
+        <button class="btn main" id="btnGo">开始游戏</button>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:#ff3d6e"></i>苹果 +10</span>
+      <span><i style="background:#ffd54a"></i>金果 +40</span>
+      <span><i style="background:#5ecbff"></i>宝石 +25 连击</span>
+      <span><i style="background:#7a8aaa"></i>毒菇 -1节</span>
+    </div>
+
+    <div class="touch" id="touch">
+      <span class="gap"></span>
+      <button data-dx="0" data-dy="-1">▲</button>
+      <span class="gap"></span>
+      <button data-dx="-1" data-dy="0">◀</button>
+      <button id="btnPause">⏸</button>
+      <button data-dx="1" data-dy="0">▶</button>
+      <span class="gap"></span>
+      <button data-dx="0" data-dy="1">▼</button>
+      <span class="gap"></span>
+    </div>
+
+    <footer>
+      <kbd>方向键</kbd>/<kbd>WASD</kbd> 移动 · <kbd>空格</kbd> 暂停/开始 · <kbd>R</kbd> 重开 · 画布可滑动
+    </footer>
   </div>
-  <div class="row-tools">
-    <label><input type="checkbox" id="chkWrap" /> 穿墙模式</label>
-    <label><input type="checkbox" id="mute" checked /> 静音</label>
-  </div>
-  <div id="gameFrame">
-    <canvas id="c" width="320" height="320"></canvas>
-  </div>
-  <div class="touch" aria-label="方向">
-    <span class="blank"></span>
-    <button type="button" data-dy="-1" data-dx="0">上</button>
-    <span class="blank"></span>
-    <button type="button" data-dy="0" data-dx="-1">左</button>
-    <button type="button" data-dy="0" data-dx="0" id="btnPause">停</button>
-    <button type="button" data-dy="0" data-dx="1">右</button>
-    <span class="blank"></span>
-    <button type="button" data-dy="1" data-dx="0">下</button>
-    <span class="blank"></span>
-  </div>
-  <p>
-    <kbd>方向键</kbd>移动 · <kbd>空格</kbd>暂停/继续 · 死后 <kbd>R</kbd> / <kbd>空格</kbd> / 方向键 重新开始<br />
-    普通食物 +10 分；<b style="color:#f7b500">金色食物</b>限时，+40 分 · 每吃 5 个食物升一级，速度变快
-  </p>
+
   <script>
-    (function () {
-      const canvas = document.getElementById("c");
-      const ctx = canvas.getContext("2d");
-      ctx.imageSmoothingEnabled = false;
+  (() => {
+    const CELL = 16;
+    const GW = 22;
+    const GH = 22;
+    const HS_KEY = "pixel_snake_demo_v1";
 
-      const CELL = 16;
-      const W = canvas.width / CELL;
-      const H = canvas.height / CELL;
-      const HS_KEY = "snake_px_high_v2";
+    const COL = {
+      bg: "#080c14",
+      grid: "#121a2c",
+      snake: "#1a9e4a",
+      head: "#3dff7a",
+      dead: "#5a6478",
+      apple: "#ff3d6e",
+      gold: "#ffd54a",
+      gem: "#5ecbff",
+      skull: "#7a8aaa",
+    };
 
-      const COL = {
-        bg: "#1a1c2e",
-        grid: "#252a3f",
-        snake: "#38b764",
-        snakeHead: "#6dfc8a",
-        food: "#ff0044",
-        foodGold: "#f7b500",
-        foodGoldPulse: "#ffe08a",
-        dead: "#5c5f72",
-      };
+    const FOOD = {
+      apple: { pts: 10, color: COL.apple, combo: false },
+      gold: { pts: 40, color: COL.gold, combo: false, timed: 90 },
+      gem: { pts: 25, color: COL.gem, combo: true },
+      skull: { pts: 0, color: COL.skull, bad: true },
+    };
 
-      const el = {
-        score: document.getElementById("score"),
-        hi: document.getElementById("hi"),
-        lvl: document.getElementById("lvl"),
-        spd: document.getElementById("spd"),
-        state: document.getElementById("state"),
-        mute: document.getElementById("mute"),
-      };
-      const chkWrap = document.getElementById("chkWrap");
-      const chkMute = document.getElementById("mute");
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
 
-      let snake,
-        dir,
-        nextDir,
-        food,
-        foodGold,
-        foodTicks,
-        alive,
-        paused,
-        tick,
-        score,
-        eaten,
-        high;
+    const ui = {
+      score: document.getElementById("score"),
+      best: document.getElementById("best"),
+      combo: document.getElementById("combo"),
+      level: document.getElementById("level"),
+      overlay: document.getElementById("overlay"),
+      ovTitle: document.getElementById("ovTitle"),
+      ovBody: document.getElementById("ovBody"),
+      pop: document.getElementById("pop"),
+      frame: document.getElementById("frame"),
+      btnGo: document.getElementById("btnGo"),
+    };
 
-      let audioCtx;
+    let state = "title"; // title | play | pause | over
+    let snake, dir, nextDir, food, foodType, foodTimer;
+    let score, combo, eaten, level, tickAcc, particles;
+    let alive, best, touchStart;
 
-      function loadHigh() {
-        const n = parseInt(localStorage.getItem(HS_KEY) || "0", 10);
-        return Number.isFinite(n) ? n : 0;
+    function loadBest() {
+      const n = parseInt(localStorage.getItem(HS_KEY) || "0", 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+    function saveBest(v) { localStorage.setItem(HS_KEY, String(v)); }
+
+    function interval() {
+      return Math.max(55, 130 - level * 8);
+    }
+
+    function randCell() {
+      return { x: (Math.random() * GW) | 0, y: (Math.random() * GH) | 0 };
+    }
+
+    function occupied(x, y) {
+      return snake.some((s) => s.x === x && s.y === y);
+    }
+
+    function pickFoodType() {
+      const r = Math.random();
+      if (r < 0.14) return "gold";
+      if (r < 0.28) return "gem";
+      if (r < 0.36) return "skull";
+      return "apple";
+    }
+
+    function spawnFood() {
+      let p, guard = 0;
+      do { p = randCell(); guard++; } while (occupied(p.x, p.y) && guard < 300);
+      food = p;
+      foodType = pickFoodType();
+      foodTimer = FOOD[foodType].timed || 0;
+    }
+
+    function reset() {
+      const cx = (GW / 2) | 0;
+      const cy = (GH / 2) | 0;
+      snake = [{ x: cx, y: cy }, { x: cx - 1, y: cy }, { x: cx - 2, y: cy }];
+      dir = { x: 1, y: 0 };
+      nextDir = { ...dir };
+      score = 0;
+      combo = 1;
+      eaten = 0;
+      level = 1;
+      tickAcc = 0;
+      particles = [];
+      alive = true;
+      best = loadBest();
+      spawnFood();
+      state = "play";
+      hideOverlay();
+      syncHud();
+    }
+
+    function syncHud() {
+      ui.score.textContent = String(score);
+      ui.best.textContent = String(Math.max(best, score));
+      ui.combo.textContent = "x" + combo;
+      ui.level.textContent = String(level);
+    }
+
+    function showOverlay(title, body, btnText) {
+      ui.ovTitle.textContent = title;
+      ui.ovBody.innerHTML = body;
+      ui.btnGo.textContent = btnText || "开始游戏";
+      ui.overlay.style.display = "flex";
+    }
+    function hideOverlay() { ui.overlay.style.display = "none"; }
+
+    function flashPop(text) {
+      ui.pop.textContent = text;
+      ui.pop.classList.remove("show");
+      void ui.pop.offsetWidth;
+      ui.pop.classList.add("show");
+    }
+
+    function shake() {
+      ui.frame.classList.remove("shake");
+      void ui.frame.offsetWidth;
+      ui.frame.classList.add("shake");
+    }
+
+    function burst(x, y, color, n = 10) {
+      for (let i = 0; i < n; i++) {
+        particles.push({
+          x: x * CELL + 8,
+          y: y * CELL + 8,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4,
+          life: 18 + ((Math.random() * 12) | 0),
+          color,
+        });
       }
+    }
 
-      function saveHigh(v) {
-        localStorage.setItem(HS_KEY, String(v));
-      }
+    function addScore(n) {
+      const gain = Math.round(n * combo);
+      score += gain;
+      if (score > best) { best = score; saveBest(best); }
+      flashPop("+" + gain);
+      syncHud();
+    }
 
-      function beep(freq, dur, vol) {
-        if (chkMute.checked) return;
-        try {
-          if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          const o = audioCtx.createOscillator();
-          const g = audioCtx.createGain();
-          o.type = "square";
-          o.frequency.value = freq;
-          g.gain.value = vol;
-          o.connect(g);
-          g.connect(audioCtx.destination);
-          const t0 = audioCtx.currentTime;
-          g.gain.setValueAtTime(vol, t0);
-          g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-          o.start(t0);
-          o.stop(t0 + dur + 0.02);
-        } catch (_) {}
-      }
+    function die(msg) {
+      alive = false;
+      state = "over";
+      shake();
+      showOverlay(
+        "游戏结束",
+        `${msg}<br>得分 <b style="color:#ffd54a">${score}</b> · 长度 ${snake.length} · 连击 x${combo}`,
+        "再来一局"
+      );
+      syncHud();
+    }
 
-      function intervalMs() {
-        const lvl = 1 + Math.floor(eaten / 5);
-        return Math.max(52, 128 - lvl * 10);
-      }
-
-      function randCell() {
-        return {
-          x: Math.floor(Math.random() * W),
-          y: Math.floor(Math.random() * H),
-        };
-      }
-
-      function spawnFood() {
-        let p;
-        do {
-          p = randCell();
-        } while (snake.some((s) => s.x === p.x && s.y === p.y));
-
-        food = p;
-        foodGold = Math.random() < 0.22;
-        foodTicks = foodGold ? 72 : 0;
-      }
-
-      function reset() {
-        const cx = Math.floor(W / 2);
-        const cy = Math.floor(H / 2);
-        snake = [
-          { x: cx, y: cy },
-          { x: cx - 1, y: cy },
-          { x: cx - 2, y: cy },
-        ];
-        dir = { x: 1, y: 0 };
-        nextDir = { ...dir };
-        alive = true;
-        paused = false;
-        tick = 0;
-        score = 0;
-        eaten = 0;
-        high = loadHigh();
+    function eat() {
+      const def = FOOD[foodType];
+      if (def.bad) {
+        combo = 1;
+        if (snake.length > 3) snake.pop();
+        burst(food.x, food.y, def.color, 8);
+        shake();
+        flashPop("毒菇!");
         spawnFood();
         syncHud();
+        return;
+      }
+      eaten++;
+      if (def.combo) {
+        combo = Math.min(8, combo + 1);
+        flashPop("连击 x" + combo);
+      }
+      addScore(def.pts);
+      level = 1 + (eaten / 4 | 0);
+      burst(food.x, food.y, def.color, 14);
+      spawnFood();
+      syncHud();
+    }
+
+    function step() {
+      if (state !== "play" || !alive) return;
+
+      if (foodTimer > 0) {
+        foodTimer--;
+        if (foodTimer <= 0 && foodType === "gold") spawnFood();
       }
 
-      function syncHud() {
-        el.score.textContent = String(score);
-        el.hi.textContent = String(Math.max(high, score));
-        const lvl = 1 + Math.floor(eaten / 5);
-        el.lvl.textContent = String(lvl);
-        el.spd.textContent = "(间隔 " + intervalMs() + "ms)";
-        if (!alive) el.state.textContent = "结束";
-        else if (paused) el.state.textContent = "暂停";
-        else el.state.textContent = "进行中";
+      dir = nextDir;
+      const nx = snake[0].x + dir.x;
+      const ny = snake[0].y + dir.y;
+
+      if (nx < 0 || nx >= GW || ny < 0 || ny >= GH) {
+        die("撞墙了");
+        return;
+      }
+      if (snake.some((s) => s.x === nx && s.y === ny)) {
+        die("咬到自己");
+        return;
       }
 
-      function trySetDir(dx, dy) {
-        if (dx === 0 && dy === 0) return;
-        if (!alive) {
-          reset();
-          return;
+      snake.unshift({ x: nx, y: ny });
+
+      if (nx === food.x && ny === food.y) eat();
+      else snake.pop();
+    }
+
+    function px(x, y, w, h, c) {
+      ctx.fillStyle = c;
+      ctx.fillRect(x, y, w, h);
+    }
+
+    function drawFood() {
+      const def = FOOD[foodType];
+      const x = food.x * CELL;
+      const y = food.y * CELL;
+      const pulse = foodTimer > 0 && foodTimer % 10 < 5;
+      const pad = pulse ? 2 : 3;
+      px(x + pad, y + pad, CELL - pad * 2, CELL - pad * 2, def.color);
+      if (foodType === "gold") px(x + 6, y + 4, 4, 2, "#fff8");
+      if (foodType === "gem") px(x + 5, y + 5, 6, 6, "#a8e8ff");
+      if (foodType === "skull") px(x + 5, y + 7, 6, 2, "#2a3040");
+    }
+
+    function drawSnake() {
+      for (let i = snake.length - 1; i >= 0; i--) {
+        const s = snake[i];
+        const x = s.x * CELL;
+        const y = s.y * CELL;
+        const head = i === 0;
+        const c = alive ? (head ? COL.head : COL.snake) : COL.dead;
+        px(x + 1, y + 1, CELL - 2, CELL - 2, c);
+        if (head && alive) {
+          const ex = dir.x > 0 ? 9 : dir.x < 0 ? 3 : 5;
+          const ey = dir.y > 0 ? 9 : dir.y < 0 ? 3 : 5;
+          px(x + ex, y + ey, 2, 2, "#081018");
+          px(x + ex + 4, y + ey, 2, 2, "#081018");
         }
-        if (paused) {
-          paused = false;
-          syncHud();
-        }
-        if (dy === -1 && dir.y === 0) nextDir = { x: 0, y: -1 };
-        if (dy === 1 && dir.y === 0) nextDir = { x: 0, y: 1 };
-        if (dx === -1 && dir.x === 0) nextDir = { x: -1, y: 0 };
-        if (dx === 1 && dir.x === 0) nextDir = { x: 1, y: 0 };
       }
+    }
 
-      function drawCell(x, y, color) {
-        ctx.fillStyle = color;
-        ctx.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+    function drawParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.globalAlpha = p.life / 30;
+        px(p.x, p.y, 3, 3, p.color);
+        ctx.globalAlpha = 1;
       }
+    }
 
-      function drawOverlay(lines, color) {
-        ctx.fillStyle = "rgba(15, 15, 26, 0.72)";
+    function draw() {
+      ctx.fillStyle = COL.bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = COL.grid;
+      for (let x = 0; x <= GW; x++) ctx.fillRect(x * CELL, 0, 1, canvas.height);
+      for (let y = 0; y <= GH; y++) ctx.fillRect(0, y * CELL, canvas.width, 1);
+
+      drawFood();
+      drawSnake();
+      drawParticles();
+
+      if (state === "pause") {
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = "bold 18px monospace";
+        ctx.font = "bold 22px monospace";
+        ctx.fillStyle = "#fff";
         ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = color;
-        const cy = canvas.height / 2 - (lines.length - 1) * 12;
-        lines.forEach((t, i) => {
-          ctx.fillText(t, canvas.width / 2, cy + i * 24);
-        });
+        ctx.fillText("暂停", canvas.width / 2, canvas.height / 2);
       }
+    }
 
-      function draw() {
-        ctx.fillStyle = COL.bg;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function setDir(dx, dy) {
+      if (dx === 0 && dy === 0) return;
+      if (state === "title" || state === "over") { reset(); return; }
+      if (state === "pause") { state = "play"; hideOverlay(); }
+      if (dy < 0 && dir.y === 0) nextDir = { x: 0, y: -1 };
+      if (dy > 0 && dir.y === 0) nextDir = { x: 0, y: 1 };
+      if (dx < 0 && dir.x === 0) nextDir = { x: -1, y: 0 };
+      if (dx > 0 && dir.x === 0) nextDir = { x: 1, y: 0 };
+    }
 
-        for (let x = 0; x < W; x++) {
-          for (let y = 0; y < H; y++) {
-            ctx.fillStyle = COL.grid;
-            ctx.fillRect(x * CELL, y * CELL, 1, 1);
-          }
-        }
-
-        if (foodGold) {
-          const pulse = foodTicks % 8 < 4;
-          drawCell(food.x, food.y, pulse ? COL.foodGoldPulse : COL.foodGold);
-        } else {
-          drawCell(food.x, food.y, COL.food);
-        }
-
-        for (let i = 0; i < snake.length; i++) {
-          const s = snake[i];
-          const c =
-            i === 0
-              ? alive
-                ? COL.snakeHead
-                : COL.dead
-              : alive
-                ? COL.snake
-                : COL.dead;
-          drawCell(s.x, s.y, c);
-        }
-
-        if (paused && alive) {
-          drawOverlay(["暂停", "空格继续"], "#a7f3d0");
-        } else if (!alive) {
-          drawOverlay(["游戏结束", "R / 空格 / 方向键 重开"], "#fca5a5");
-        }
+    function togglePause() {
+      if (state === "play") {
+        state = "pause";
+        showOverlay("暂停", "按空格继续游戏", "继续");
+      } else if (state === "pause") {
+        state = "play";
+        hideOverlay();
       }
+    }
 
-      function step() {
-        if (!alive || paused) return;
-
-        if (foodGold && foodTicks > 0) {
-          foodTicks -= 1;
-          if (foodTicks <= 0) {
-            spawnFood();
-            beep(120, 0.05, 0.03);
-          }
-        }
-
-        dir = nextDir;
-        let nx = snake[0].x + dir.x;
-        let ny = snake[0].y + dir.y;
-
-        if (chkWrap.checked) {
-          nx = ((nx % W) + W) % W;
-          ny = ((ny % H) + H) % H;
-        } else if (nx < 0 || nx >= W || ny < 0 || ny >= H) {
-          die();
-          return;
-        }
-
-        const head = { x: nx, y: ny };
-        if (snake.some((s) => s.x === head.x && s.y === head.y)) {
-          die();
-          return;
-        }
-
-        snake.unshift(head);
-
-        if (head.x === food.x && head.y === food.y) {
-          eaten += 1;
-          if (foodGold) {
-            score += 40;
-            beep(660, 0.06, 0.04);
-          } else {
-            score += 10;
-            beep(420, 0.05, 0.035);
-          }
-          spawnFood();
-        } else {
-          snake.pop();
-        }
-
-        if (score > high) {
-          high = score;
-          saveHigh(high);
-        }
-        syncHud();
-      }
-
-      function die() {
-        alive = false;
-        beep(140, 0.12, 0.05);
-        syncHud();
-      }
-
-      document.addEventListener("keydown", (e) => {
-        const k = e.key;
-        if (k === " " || k === "Spacebar") {
-          e.preventDefault();
-          if (!alive) {
-            reset();
-            return;
-          }
-          paused = !paused;
-          syncHud();
-          return;
-        }
-        if ((k === "r" || k === "R") && !alive) {
-          reset();
-          e.preventDefault();
-          return;
-        }
-        if (k === "ArrowUp") trySetDir(0, -1);
-        if (k === "ArrowDown") trySetDir(0, 1);
-        if (k === "ArrowLeft") trySetDir(-1, 0);
-        if (k === "ArrowRight") trySetDir(1, 0);
+    document.addEventListener("keydown", (e) => {
+      const k = e.key.toLowerCase();
+      if (k === " " || e.code === "Space") {
         e.preventDefault();
-      });
-
-      document.querySelectorAll(".touch button[data-dx]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const dx = Number(btn.getAttribute("data-dx"));
-          const dy = Number(btn.getAttribute("data-dy"));
-          if (btn.id === "btnPause") {
-            if (!alive) {
-              reset();
-              return;
-            }
-            paused = !paused;
-            syncHud();
-            return;
-          }
-          trySetDir(dx, dy);
-        });
-      });
-
-      function loop(ts) {
-        if (alive && !paused) {
-          tick += ts - (loop.prev || ts);
-          loop.prev = ts;
-          const ms = intervalMs();
-          while (tick > ms) {
-            tick -= ms;
-            step();
-          }
-        } else {
-          loop.prev = ts;
-        }
-        draw();
-        requestAnimationFrame(loop);
+        if (state === "title" || state === "over") reset();
+        else togglePause();
+        return;
       }
+      if (k === "r" && state === "over") { reset(); return; }
+      if (k === "arrowup" || k === "w") setDir(0, -1);
+      if (k === "arrowdown" || k === "s") setDir(0, 1);
+      if (k === "arrowleft" || k === "a") setDir(-1, 0);
+      if (k === "arrowright" || k === "d") setDir(1, 0);
+      if (["arrowup","arrowdown","arrowleft","arrowright","w","a","s","d"].includes(k)) e.preventDefault();
+    });
 
-      high = loadHigh();
-      el.hi.textContent = String(high);
-      reset();
+    ui.btnGo.onclick = () => {
+      if (state === "over" || state === "title" || state === "pause") {
+        if (state === "pause") { state = "play"; hideOverlay(); }
+        else reset();
+      }
+    };
+
+    document.getElementById("touch").addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      if (btn.id === "btnPause") { togglePause(); return; }
+      setDir(Number(btn.dataset.dx), Number(btn.dataset.dy));
+    });
+
+    canvas.addEventListener("touchstart", (e) => {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    canvas.addEventListener("touchend", (e) => {
+      if (!touchStart) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStart.x;
+      const dy = t.clientY - touchStart.y;
+      if (Math.abs(dx) < 14 && Math.abs(dy) < 14) return;
+      if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+      else setDir(0, dy > 0 ? 1 : -1);
+      touchStart = null;
+    });
+
+    best = loadBest();
+    ui.best.textContent = String(best);
+    snake = [{ x: 0, y: 0 }];
+    food = { x: 0, y: 0 };
+    foodType = "apple";
+
+    let prev = 0;
+    function loop(ts) {
+      if (state === "play" && alive) {
+        tickAcc += ts - prev;
+        const ms = interval();
+        while (tickAcc >= ms) { tickAcc -= ms; step(); }
+      }
+      prev = ts;
+      draw();
       requestAnimationFrame(loop);
-    })();
+    }
+    requestAnimationFrame(loop);
+  })();
   </script>
 </body>
 </html>

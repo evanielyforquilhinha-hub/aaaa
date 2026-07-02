@@ -25,6 +25,10 @@ function startReview() {
   uni.navigateTo({ url: '/pages/review/review' })
 }
 
+function goWords() {
+  uni.switchTab({ url: '/pages/words/words' })
+}
+
 function refresh() {
   stats.value = getStats()
   const d = new Date()
@@ -41,7 +45,6 @@ onMounted(() => {
 </script>
 
 <template>
-  <view style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;font-size:120px;font-weight:900;color:#FF3B30;">1</view>
   <view class="me-page">
     <view class="nav-bar" :style="{ paddingTop: `${statusBarHeight}px` }">
       <view class="nav-bar__inner">
@@ -53,7 +56,7 @@ onMounted(() => {
 
       <view class="date-card">
         <text class="date-card__text">{{ todayDate }}</text>
-        <text class="date-card__subtitle">阇观英语 · 每日打卡</text>
+        <text class="date-card__subtitle">每日英语 · 精读打卡</text>
       </view>
 
       <view class="stats-card">
@@ -61,11 +64,11 @@ onMounted(() => {
         <view class="stats-grid">
           <view class="stat-item">
             <text class="stat-item__value stats--green">{{ stats.total }}</text>
-            <text class="stat-item__label">总词文</text>
+            <text class="stat-item__label">总词汇</text>
           </view>
           <view class="stat-item">
             <text class="stat-item__value stats--orange">{{ stats.todayAdded }}</text>
-            <text class="stat-item__label">今日新墟</text>
+            <text class="stat-item__label">今日新增</text>
           </view>
           <view class="stat-item">
             <text class="stat-item__value stats--green">{{ stats.todayReview }}</text>
@@ -102,12 +105,12 @@ onMounted(() => {
           <text class="menu-item__arrow">&#8250;</text>
         </view>
         <view class="menu-item" @tap="refresh">
-          <text class="menu-item__label">挴新统计</text>
-          <text class="menu-item__arrow">×··</text>
+          <text class="menu-item__label">刷新统计</text>
+          <text class="menu-item__arrow">›</text>
         </view>
-        <view class="menu-item" @tap="uni.switchTab({ url: '/pages/words/words' })">
+        <view class="menu-item" @tap="goWords">
           <text class="menu-item__label">词库管理</text>
-          <text class="menu-item__arrow">×··</text>
+          <text class="menu-item__arrow">›</text>
         </view>
       </view>
     </scroll-view>
