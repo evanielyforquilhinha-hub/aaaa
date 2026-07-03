@@ -36,7 +36,7 @@ const safeAreaBottom = ref(0)
 const viewportHeight = ref(720)
 const readerScrollTop = ref(0)
 const observedReaderScrollTop = ref(0)
-const buildFingerprint = 'v2006'
+const buildFingerprint = 'v2012-article-hero'
 const nightMode = ref(false)
 const fontScale = ref(1)
 const reading = ref(false)
@@ -60,6 +60,8 @@ const fontScaleOptions = [
   { label: '标准', value: 1 },
   { label: '大', value: 1.12 },
 ]
+let lastSettingsActionAt = 0
+let lastSettingsActionKey = ''
 
 const highlightedWord = computed(() => (wordSheetVisible.value ? selectedWordKey.value : ''))
 
@@ -102,6 +104,8 @@ function closeWordSheet() {
 function openSettingsPanel() {
   if (wordSheetVisible.value) closeWordSheet()
   if (translationVisible.value) closeTranslation()
+  lastSettingsActionAt = 0
+  lastSettingsActionKey = ''
   settingsPanelVisible.value = true
   nextTick(() => {
     settingsPanelActive.value = true
@@ -326,7 +330,9 @@ function openSentenceTranslation(sentence: SentenceUnit, event?: any) {
   if (settingsPanelVisible.value) closeSettingsPanel()
   const fallbackRect = getTouchFallbackRect(event)
   suppressWordTapUntil.value = Date.now() + 720
-  ignorePopoverActionsUntil = Date.now() + 120
+  ignorePopoverActionsUntil = 0
+  lastPopoverActionAt = 0
+  lastPopoverActionKey = ''
   selectedSentenceId.value = sentence.id
   selectedSentenceText.value = sentence.plainText
   selectedTranslation.value = sentence.translation
@@ -396,6 +402,19 @@ async function speakSelectedSentence() {
   })
 }
 
+function copySelectedSentence() {
+  const original = selectedSentenceText.value.trim()
+  if (!original) return
+  const translated = displayTranslation.value.trim()
+  const data = translated ? `${original}\n${translated}` : original
+
+  uni.setClipboardData({
+    data,
+    success: () => uni.showToast({ title: '已复制', icon: 'success' }),
+    fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+  })
+}
+
 function toggleKeySentence() {
   const sentenceId = selectedSentenceId.value
   if (!sentenceId) return
@@ -418,6 +437,15 @@ function runPopoverAction(key: string, action: () => void, event?: any) {
   action()
 }
 
+function runSettingsAction(key: string, action: () => void, event?: any) {
+  consumeInlineEvent(event)
+  const now = Date.now()
+  if (lastSettingsActionKey === key && now - lastSettingsActionAt < 360) return
+  lastSettingsActionKey = key
+  lastSettingsActionAt = now
+  action()
+}
+
 function handleHighlightAction(event?: any) {
   runPopoverAction('highlight', markSentenceHighlight, event)
 }
@@ -428,8 +456,24 @@ function handleSentenceSpeakAction(event?: any) {
   }, event)
 }
 
+function handleCopyAction(event?: any) {
+  runPopoverAction('copy-sentence', copySelectedSentence, event)
+}
+
 function handleKeySentenceAction(event?: any) {
   runPopoverAction('key-sentence', toggleKeySentence, event)
+}
+
+function handleFontScaleAction(scale: number, event?: any) {
+  runSettingsAction(`font-scale-${scale}`, () => setFontScale(scale), event)
+}
+
+function handleNightModeAction(event?: any) {
+  runSettingsAction('night-mode', toggleNightMode, event)
+}
+
+function handleGoWordsAction(event?: any) {
+  runSettingsAction('go-words', goWords, event)
 }
 
 async function readAloud() {
@@ -535,10 +579,23 @@ onUnmounted(() => {
       @scroll="handleReaderScroll"
       @tap="dismissFloatingPanels"
     >
-      <view class="reader-hero">
-        <view class="reader-hero__deck">
-          <text class="reader-hero__eyebrow">{{ currentArticle.level }} · Intensive Reading</text>
-          <text class="reader-hero__title">{{ currentArticle.title }}</text>
+      <view class="reader-flow">
+        <view class="reader-hero">
+          <view class="reader-hero__visual">
+            <view class="reader-cover">
+              <image
+                class="reader-cover__image"
+                :src="currentArticle.heroImage"
+                mode="aspectFill"
+              />
+              <view class="reader-cover__shade" />
+              <view class="reader-cover__content">
+                <text class="reader-hero__eyebrow">{{ currentArticle.level }} · Intensive Reading</text>
+                <text class="reader-hero__title">{{ currentArticle.title }}</text>
+                <text class="reader-cover__caption">{{ currentArticle.visualCaption }}</text>
+              </view>
+            </view>
+          </view>
           <view class="reader-meta">
             <view class="reader-meta__item">
               <text class="reader-meta__icon">▥</text>
@@ -550,76 +607,75 @@ onUnmounted(() => {
             </view>
             <view class="reader-meta__button">
               <text class="reader-meta__button-icon">▣</text>
-              <text class="reader-meta__button-text">{{ currentLearningContent?.status === 'ready' ? '精讲已缓存' : '精讲生成中' }}</text>
+              <text class="reader-meta__text">{{ currentLearningContent?.status === 'ready' ? '精讲已缓存' : '精讲生成中' }}</text>
             </view>
           </view>
         </view>
-        <view class="reader-hero__visual">
-          <view class="reader-cover">
-            <view class="reader-cover__art">
-              <view class="reader-cover__symbol">{{ currentArticle.visualSymbol }}</view>
-              <text class="reader-cover__caption">{{ currentArticle.visualCaption }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
 
-      <view class="reader-body">
-        <view
-          v-for="block in blocks"
-          :key="block.id"
-          class="reader-body__block"
-        >
-          <view class="reader-body__english">
-            <view
-              v-for="sentence in block.sentences"
-              class="reader-body__sentence-unit"
-              :class="{ 'reader-body__sentence-unit--open': isTranslationOpenForSentence(sentence.id) }"
-              :key="`${sentence.id}-unit`"
-            >
+        <view class="reader-body reader-body--centered">
+          <view
+            v-for="block in blocks"
+            :key="block.id"
+            class="reader-body__block"
+          >
+            <view class="reader-body__english">
               <view
-              :id="sentence.id"
-              :key="sentence.id"
-              class="reader-body__sentence"
-              :class="{
-                'reader-body__sentence--marked': isSentenceHighlighted(sentence.id),
-                'reader-body__sentence--key': isKeySentence(sentence.id),
-              }"
-              :style="{ fontSize: readerFontSize, lineHeight: readerLineHeight }"
-              @longpress="openSentenceTranslation(sentence, $event)"
-            >
-              <block
-                v-for="(token, tokenIndex) in sentence.tokens"
-                :key="`${sentence.id}-${tokenIndex}-${token.text}`"
+                v-for="sentence in block.sentences"
+                class="reader-body__sentence-unit"
+                :class="{ 'reader-body__sentence-unit--open': isTranslationOpenForSentence(sentence.id) }"
+                :key="`${sentence.id}-unit`"
               >
                 <view
-                  v-if="token.type === 'word'"
-                  class="reader-body__token reader-body__token-hit word"
+                  :id="sentence.id"
+                  :key="sentence.id"
+                  class="reader-body__sentence"
                   :class="{
-                    active: isHighlighted(token),
-                    'reader-body__token--emphasis': token.emphasis,
+                    'reader-body__sentence--marked': isSentenceHighlighted(sentence.id),
+                    'reader-body__sentence--key': isKeySentence(sentence.id),
                   }"
-                  hover-class="none"
-                  @tap.stop="openWord(token)"
-                  @longpress.stop="openSentenceTranslation(sentence, $event)"
-                >{{ token.text }}</view>
-                <text
-                  v-else
-                  class="reader-body__token reader-body__token-static"
-                >{{ token.text }}</text>
-              </block>
-              <text class="reader-body__play-mark">▸</text>
-            </view>
+                  :style="{ fontSize: readerFontSize, lineHeight: readerLineHeight }"
+                  @longpress="openSentenceTranslation(sentence, $event)"
+                >
+                  <block
+                    v-for="(token, tokenIndex) in sentence.tokens"
+                    :key="`${sentence.id}-${tokenIndex}-${token.text}`"
+                  >
+                    <view
+                      v-if="token.type === 'word'"
+                      class="reader-body__token reader-body__token-hit word"
+                      :class="{
+                        active: isHighlighted(token),
+                        'reader-body__token--emphasis': token.emphasis,
+                      }"
+                      hover-class="none"
+                      @tap.stop="openWord(token)"
+                      @longpress.stop="openSentenceTranslation(sentence, $event)"
+                    >{{ token.text }}</view>
+                    <text
+                      v-else
+                      class="reader-body__token reader-body__token-static"
+                    >{{ token.text }}</text>
+                  </block>
+                  <text class="reader-body__play-mark">▸</text>
+                </view>
+              </view>
             </view>
           </view>
         </view>
-      </view>
 
-      <view class="reader-tail">
-        <text class="reader-tail__text">{{ currentIndex + 1 }} / {{ articles.length }}</text>
+        <view class="reader-tail">
+          <text class="reader-tail__text">{{ currentIndex + 1 }} / {{ articles.length }}</text>
+        </view>
+        <view :style="{ height: safeAreaBottom + 46 + 'px' }" />
       </view>
-      <view :style="{ height: safeAreaBottom + 46 + 'px' }" />
     </scroll-view>
+
+    <view
+      v-if="floatingLayerVisible"
+      class="reader-dismiss-layer"
+      :class="{ active: floatingLayerActive }"
+      @tap="dismissFloatingPanels"
+    />
 
     <view
       v-if="translationVisible"
@@ -640,24 +696,36 @@ onUnmounted(() => {
       <text class="reader-sentence-popover__copy">{{ displayTranslation }}</text>
       <text v-if="displayTranslationNote" class="reader-sentence-popover__note">{{ displayTranslationNote }}</text>
       <view class="reader-sentence-popover__actions">
-        <view class="reader-sentence-popover__action" @tap.stop="handleHighlightAction">
+        <view
+          class="reader-sentence-popover__action"
+          @tap.stop="handleHighlightAction"
+          @touchend.stop.prevent="handleHighlightAction"
+        >
           <text>{{ isSentenceHighlighted(selectedSentenceId) ? '取消划线' : '划线' }}</text>
         </view>
-        <view class="reader-sentence-popover__action" @tap.stop="handleSentenceSpeakAction">
+        <view
+          class="reader-sentence-popover__action"
+          @tap.stop="handleCopyAction"
+          @touchend.stop.prevent="handleCopyAction"
+        >
+          <text>复制</text>
+        </view>
+        <view
+          class="reader-sentence-popover__action"
+          @tap.stop="handleSentenceSpeakAction"
+          @touchend.stop.prevent="handleSentenceSpeakAction"
+        >
           <text>朗读</text>
         </view>
-        <view class="reader-sentence-popover__action" @tap.stop="handleKeySentenceAction">
+        <view
+          class="reader-sentence-popover__action"
+          @tap.stop="handleKeySentenceAction"
+          @touchend.stop.prevent="handleKeySentenceAction"
+        >
           <text>{{ isKeySentence(selectedSentenceId) ? '取消重点' : '重点句' }}</text>
         </view>
       </view>
     </view>
-
-    <view
-      v-if="floatingLayerVisible"
-      class="reader-dismiss-layer"
-      :class="{ active: floatingLayerActive }"
-      @tap="dismissFloatingPanels"
-    />
 
     <view
       v-if="settingsPanelVisible"
@@ -683,14 +751,19 @@ onUnmounted(() => {
             :key="option.label"
             class="reader-settings-segment__item"
             :class="{ active: isFontScaleSelected(option.value) }"
-            @tap="setFontScale(option.value)"
+            @tap.stop="handleFontScaleAction(option.value, $event)"
+            @touchend.stop.prevent="handleFontScaleAction(option.value, $event)"
           >
             <text>{{ option.label }}</text>
           </view>
         </view>
       </view>
 
-      <view class="reader-settings-row" @tap="toggleNightMode">
+      <view
+        class="reader-settings-row"
+        @tap.stop="handleNightModeAction"
+        @touchend.stop.prevent="handleNightModeAction"
+      >
         <view>
           <text class="reader-settings-row__title">夜间模式</text>
           <text class="reader-settings-row__desc">{{ nightMode ? '已开启' : '柔和深色背景' }}</text>
@@ -700,7 +773,11 @@ onUnmounted(() => {
         </view>
       </view>
 
-      <view class="reader-settings-row reader-settings-row--link" @tap="goWords">
+      <view
+        class="reader-settings-row reader-settings-row--link"
+        @tap.stop="handleGoWordsAction"
+        @touchend.stop.prevent="handleGoWordsAction"
+      >
         <view>
           <text class="reader-settings-row__title">生词本</text>
           <text class="reader-settings-row__desc">查看已收藏单词</text>
@@ -745,35 +822,18 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .reader-page {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 16% 0%, var(--reader-warm-soft), transparent 30%),
-    radial-gradient(circle at 86% 4%, var(--reader-cool-soft), transparent 34%),
-    linear-gradient(180deg, var(--reader-paper) 0%, #fff 284px, #fff 100%);
+  background: #fff;
   color: #202124;
   position: relative;
   overflow: hidden;
 }
 
 .reader-page__ambient {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 312px;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background:
-    linear-gradient(145deg, var(--reader-visual-start), var(--reader-visual-end)),
-    linear-gradient(180deg, var(--reader-paper), #fff);
+  display: none;
 }
 
 .reader-page__ambient-wash {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(145deg, var(--reader-visual-start), var(--reader-visual-end)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.88) 58%, #fff 100%);
+  display: none;
 }
 
 .reader-page--night {
@@ -782,7 +842,7 @@ onUnmounted(() => {
 }
 
 .reader-page--night .reader-page__ambient {
-  opacity: 0.32;
+  display: none;
 }
 
 .reader-topbar {
@@ -874,35 +934,46 @@ onUnmounted(() => {
   min-height: 100vh;
   position: relative;
   z-index: 1;
+  background: #fff;
+}
+
+.reader-flow {
+  min-height: 100vh;
+  background:
+    linear-gradient(112deg, var(--reader-warm-soft) 0%, rgba(255, 255, 255, 0) 42%),
+    linear-gradient(248deg, var(--reader-cool-soft) 0%, rgba(255, 255, 255, 0) 46%),
+    linear-gradient(180deg, var(--reader-visual-start) 0%, var(--reader-visual-end) 172px, rgba(255, 255, 255, 0.96) 342px, #fff 100%);
+}
+
+.reader-page--night .reader-flow {
+  background:
+    linear-gradient(180deg, rgba(28, 31, 28, 0.96) 0%, rgba(18, 20, 17, 0.98) 340px, #121411 100%);
 }
 
 .reader-hero {
-  padding: 42px 26px 18px;
+  padding: 14px 20px 16px;
   position: relative;
-}
-
-.reader-hero__deck {
-  margin-bottom: 15px;
 }
 
 .reader-hero__eyebrow {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0;
-  color: var(--reader-accent);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .reader-hero__title {
   display: block;
   font-family: $font-family-serif;
-  font-size: 27px;
-  line-height: 1.12;
+  font-size: 25px;
+  line-height: 1.13;
   font-weight: 700;
-  color: #202124;
+  color: #fff;
   letter-spacing: 0;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
   text-wrap: balance;
 }
 
@@ -915,6 +986,7 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 12px;
 }
 
 .reader-meta__item {
@@ -976,63 +1048,68 @@ onUnmounted(() => {
 .reader-hero__visual {
   position: relative;
   padding: 0;
-  border-radius: 14px;
-  background: transparent;
-  box-shadow: 0 10px 24px var(--reader-shadow);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: 0 14px 30px var(--reader-shadow);
   overflow: hidden;
 }
 
 .reader-cover {
   position: relative;
   width: 100%;
-  height: 116px;
+  height: 188px;
   overflow: hidden;
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.68), transparent 26%),
-    radial-gradient(circle at 78% 24%, var(--reader-cool-soft), transparent 32%),
-    linear-gradient(135deg, var(--reader-visual-start), var(--reader-visual-end));
-}
-
-.reader-cover__art {
-  height: 100%;
-  padding: 17px 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-sizing: border-box;
-}
-
-.reader-cover__symbol {
-  width: 62px;
-  height: 62px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.46);
-  color: var(--reader-accent);
-  font-family: $font-family-serif;
-  font-size: 36px;
-  line-height: 1;
-  font-weight: 700;
+  background: linear-gradient(135deg, var(--reader-visual-start), var(--reader-visual-end));
+}
+
+.reader-cover__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.reader-cover__shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.04) 0%, rgba(0, 0, 0, 0.02) 38%, rgba(0, 0, 0, 0.58) 100%),
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.28), transparent 34%);
+}
+
+.reader-cover__content {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 17px;
+  z-index: 1;
 }
 
 .reader-cover__caption {
-  max-width: 190px;
-  text-align: right;
-  color: rgba(31, 35, 38, 0.54);
+  display: block;
+  max-width: 250px;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.78);
   font-size: 12px;
   line-height: 1.45;
   font-weight: 600;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
 
 .reader-body {
   padding: 0 30px 14px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .reader-body__block {
-  margin-bottom: 22px;
+  width: 100%;
+  max-width: 318px;
+  margin: 0 auto 22px;
   position: relative;
   transition: transform 0.2s ease;
 }
@@ -1044,6 +1121,8 @@ onUnmounted(() => {
   letter-spacing: 0;
   margin-bottom: 14px;
   position: relative;
+  width: 100%;
+  text-align: left;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
@@ -1109,17 +1188,17 @@ onUnmounted(() => {
 
 .reader-body__sentence--marked .reader-body__token {
   border-radius: 3px;
-  background: rgba(255, 232, 144, 0);
-  background-image: linear-gradient(#111316, #111316);
-  background-repeat: no-repeat;
-  background-size: 100% 1px;
-  background-position: 0 calc(100% - 2px);
+  text-decoration: underline;
+  text-decoration-color: #111316;
+  text-decoration-thickness: 1px;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
 }
 
 .reader-page--night .reader-body__sentence--marked .reader-body__token {
-  background-image: linear-gradient(rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.92));
+  text-decoration-color: rgba(255, 255, 255, 0.92);
 }
 
 .reader-body__sentence--marked .reader-body__token.active {
@@ -1137,7 +1216,6 @@ onUnmounted(() => {
 
 .reader-body__sentence-unit--open .reader-body__sentence--marked .reader-body__token {
   background-color: rgba(255, 237, 171, 0.46);
-  background-image: linear-gradient(#111316, #111316);
 }
 
 .reader-page--night .reader-body__sentence-unit--open .reader-body__token {
@@ -1158,7 +1236,7 @@ onUnmounted(() => {
 
 .reader-sentence-popover {
   position: fixed;
-  z-index: 170;
+  z-index: 220;
   padding: 14px 16px 13px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.07);
@@ -1254,7 +1332,9 @@ onUnmounted(() => {
 .reader-sentence-popover__actions {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
   gap: 4px;
   margin-top: 12px;
   padding-top: 10px;
@@ -1262,13 +1342,16 @@ onUnmounted(() => {
 }
 
 .reader-sentence-popover__action {
-  flex: 0 0 auto;
+  position: relative;
+  z-index: 3;
+  flex: 1 1 0;
   min-width: 0;
   height: 30px;
-  padding: 0 10px;
+  padding: 0 4px;
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   border-radius: 15px;
   background: transparent;
   font-size: 11px;

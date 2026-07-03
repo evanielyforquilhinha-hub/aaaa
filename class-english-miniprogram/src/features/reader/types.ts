@@ -20,6 +20,7 @@ export interface Article {
   level: string
   visualSymbol: string
   visualCaption: string
+  heroImage: string
   content: string
   source: string
   theme: ReaderTheme

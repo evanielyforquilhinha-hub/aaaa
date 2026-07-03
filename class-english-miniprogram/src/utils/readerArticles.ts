@@ -8,6 +8,7 @@ export const articles: Article[] = [
     level: 'CET-6',
     visualSymbol: 'Y',
     visualCaption: 'Color cues and insect vision',
+    heroImage: '/static/articles/bugs-bright-clothes.jpg',
     content:
       'Recently, try to avoid wearing yellow when you go out - otherwise, you might find yourself strangely more attractive, but only to insects.\n\nUnlike older parts of plants, young leaves and flowers tend to be brighter, with many flowers being yellow in color to attract pollinators. For pollinating insects, bright yellow means a feast of nectar and pollen.\n\nInsects have compound eyes and are sensitive to ultraviolet light, but they also see bright colors such as yellow and blue much better than humans do. That is why yellow clothes can look like a beacon to bugs.\n\nSo the next time you plan a picnic or a walk in the park, perhaps skip the yellow shirt - unless you want to become the most popular person at the insect party.',
     source: 'Annie Daily',
@@ -31,6 +32,7 @@ export const articles: Article[] = [
     level: 'CET-4',
     visualSymbol: 'W',
     visualCaption: 'Nature, rhythm, and attention',
+    heroImage: '/static/articles/walking.jpg',
     content:
       'For most of human history, walking was simply how we got from one place to another. But modern science is revealing something remarkable. Walking, especially in nature, has profound effects on the human brain.\n\nA landmark study from Stanford University found that people who walked for ninety minutes through a natural setting showed significantly lower activity in the part of the brain associated with repetitive negative thoughts.\n\nWalking also boosts creativity. In a series of experiments, researchers discovered that people generated nearly twice as many creative ideas while walking compared to sitting.',
     source: 'Stanford Medicine',
@@ -54,6 +56,7 @@ export const articles: Article[] = [
     level: 'CET-6',
     visualSymbol: 'D',
     visualCaption: 'Sleep, memory, and recall',
+    heroImage: '/static/articles/dreams.jpg',
     content:
       'Every morning, millions of people wake up with vivid memories of strange and wonderful dreams. Others open their eyes and recall nothing at all.\n\nNeuroscientists have been studying this question for decades. The answer appears to lie not in how much people dream, but in how easily their brains wake up during the night.\n\nIf you want to remember more of your dreams, keep a dream journal by your bed.',
     source: 'Nature Neuroscience',

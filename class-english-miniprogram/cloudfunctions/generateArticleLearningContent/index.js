@@ -65,15 +65,20 @@ const articleLearningContentSchema = {
 }
 
 exports.main = async (event = {}) => {
-  const articleId = String(event.articleId || '')
-  const article = event.article || null
+  const articleId = String(event.articleId || '').trim()
+  const force = event.force === true
 
-  if (!articleId || !article?.content) {
-    return fail('INVALID_ARTICLE', 'articleId and article.content are required')
+  if (!articleId) {
+    return fail('INVALID_ARTICLE_ID', 'articleId is required')
+  }
+
+  const article = await readPublishedOrDraftArticle(articleId)
+  if (!article) {
+    return fail('ARTICLE_NOT_FOUND', 'Article was not found')
   }
 
   const cached = await readCachedContent(articleId)
-  if (cached?.status === 'ready') {
+  if (cached?.status === 'ready' && !force) {
     return { ok: true, source: 'cache', data: cached }
   }
 
@@ -81,17 +86,57 @@ exports.main = async (event = {}) => {
     return fail('MISSING_OPENAI_API_KEY', 'Set OPENAI_API_KEY in the cloud function environment')
   }
 
-  const generated = await generateWithOpenAI(article)
-  const data = {
+  await writeLearningContent(articleId, {
     articleId,
-    status: 'ready',
-    provider: OPENAI_MODEL,
+    status: 'pending',
+    provider: 'cloud-cache',
+    model: OPENAI_MODEL,
     updatedAt: new Date().toISOString(),
-    ...generated,
-  }
+    generatedAt: null,
+    sentenceTranslations: {},
+    wordExplanations: {},
+    reviewedPhrases: [],
+  })
 
-  await db.collection(COLLECTION).doc(articleId).set({ data })
-  return { ok: true, source: 'generated', data }
+  try {
+    const generated = await generateWithOpenAI(article)
+    const data = {
+      articleId,
+      status: 'ready',
+      provider: 'cloud-cache',
+      model: OPENAI_MODEL,
+      updatedAt: new Date().toISOString(),
+      generatedAt: Date.now(),
+      ...generated,
+    }
+
+    await writeLearningContent(articleId, data)
+    return { ok: true, source: 'generated', data }
+  } catch (error) {
+    const errorCode = readErrorCode(error)
+    const errorMessage = String(error.message || error)
+    await writeLearningContent(articleId, {
+      articleId,
+      status: 'failed',
+      provider: 'cloud-cache',
+      model: OPENAI_MODEL,
+      updatedAt: new Date().toISOString(),
+      generatedAt: null,
+      errorCode,
+      errorMessage,
+      sentenceTranslations: {},
+      wordExplanations: {},
+      reviewedPhrases: [],
+    })
+    return fail(errorCode, errorMessage)
+  }
+}
+
+async function readPublishedOrDraftArticle(articleId) {
+  const result = await db.collection('articles').where({ id: articleId }).limit(1).get()
+  const article = result.data[0]
+  if (!article || article.status === 'archived') return null
+  return article
 }
 
 async function readCachedContent(articleId) {
@@ -101,6 +146,10 @@ async function readCachedContent(articleId) {
   } catch (error) {
     return null
   }
+}
+
+async function writeLearningContent(articleId, document) {
+  await db.collection(COLLECTION).doc(articleId).set({ data: document })
 }
 
 async function generateWithOpenAI(article) {
@@ -155,11 +204,53 @@ function readOutputText(result) {
 }
 
 function normalizeGeneratedContent(content) {
-  return {
-    sentenceTranslations: content.sentenceTranslations || [],
-    wordExplanations: content.wordExplanations || [],
-    reviewedPhrases: content.reviewedPhrases || [],
+  const sentenceTranslations = {}
+  const wordExplanations = {}
+
+  for (const item of content.sentenceTranslations || []) {
+    const key = `${Number(item.blockIndex)}:${Number(item.sentenceIndex)}`
+    sentenceTranslations[key] = {
+      text: String(item.text || ''),
+      translation: String(item.translation || ''),
+      note: String(item.note || ''),
+    }
   }
+
+  for (const item of content.wordExplanations || []) {
+    const key = normalizeWord(item.word)
+    if (!key) continue
+    wordExplanations[key] = {
+      word: String(item.word || ''),
+      phonetic: String(item.phonetic || ''),
+      partOfSpeech: String(item.partOfSpeech || ''),
+      meaning: String(item.meaning || ''),
+      example: String(item.example || ''),
+      exampleTranslation: String(item.exampleTranslation || ''),
+      note: item.note ? String(item.note) : undefined,
+    }
+  }
+
+  return {
+    sentenceTranslations,
+    wordExplanations,
+    reviewedPhrases: (content.reviewedPhrases || []).map((phrase) => ({
+      text: String(phrase.text || ''),
+      meaning: String(phrase.meaning || ''),
+      reason: String(phrase.reason || ''),
+    })),
+  }
+}
+
+function normalizeWord(word) {
+  return String(word || '')
+    .toLowerCase()
+    .replace(/[^a-z']/g, '')
+}
+
+function readErrorCode(error) {
+  const message = String(error.message || error)
+  const match = message.match(/^([A-Z_]+):?/)
+  return match?.[1] || 'GENERATE_LEARNING_CONTENT_FAILED'
 }
 
 function fail(code, message) {

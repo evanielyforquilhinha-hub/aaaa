@@ -28,6 +28,7 @@
                     "build:mp-weixin":  "node scripts/build-mp-weixin.cjs",
                     "build:mp-weixin:raw":  "uni build -p mp-weixin",
                     "sync:mp-root":  "node scripts/sync-mp-root.cjs",
-                    "check:ui":  "node scripts/ui-smoke-check.cjs"
+                    "check:ui":  "node scripts/ui-smoke-check.cjs",
+                    "check:backend":  "node scripts/backend-smoke-check.cjs"
                 }
 }

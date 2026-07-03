@@ -43,6 +43,14 @@ function assert(condition, message) {
   }
 }
 
+function sliceBetween(content, startMarker, endMarker, label) {
+  const start = content.indexOf(startMarker)
+  assert(start !== -1, `${label} missing start marker: ${startMarker}`)
+  const end = content.indexOf(endMarker, start + startMarker.length)
+  assert(end !== -1 && end > start, `${label} missing end marker after ${startMarker}: ${endMarker}`)
+  return content.slice(start, end)
+}
+
 const files = {
   reader: read('src/pages/index/index.vue'),
   words: read('src/pages/words/words.vue'),
@@ -141,6 +149,7 @@ const requiredReaderMarkers = [
   'getReaderLearningContent',
   'getReaderWordExplanation',
   'addVocabularyWord',
+  'v2012-article-hero',
   'selectedSentenceText',
   'selectedSentenceId',
   'selectedTranslationNote',
@@ -158,6 +167,10 @@ const requiredReaderMarkers = [
   'openSettingsPanel',
   'closeSettingsPanel',
   'setFontScale',
+  'runSettingsAction',
+  'handleFontScaleAction',
+  'handleNightModeAction',
+  'handleGoWordsAction',
   'reader-topbar__settings',
   'reader-settings-sheet',
   'reader-settings-segment',
@@ -165,13 +178,27 @@ const requiredReaderMarkers = [
   'isTranslationOpenForSentence',
   'isSentenceHighlighted',
   'handleHighlightAction',
-  'ignorePopoverActionsUntil',
+  'copySelectedSentence',
+  'handleCopyAction',
+  'ignorePopoverActionsUntil = 0',
   'stopInlineEvent',
   '@tap.stop="handleHighlightAction"',
+  '@touchend.stop.prevent="handleHighlightAction"',
+  '@tap.stop="handleCopyAction"',
+  '@tap.stop="handleFontScaleAction(option.value, $event)"',
+  '@touchend.stop.prevent="handleFontScaleAction(option.value, $event)"',
+  '@tap.stop="handleNightModeAction"',
+  '@touchend.stop.prevent="handleNightModeAction"',
+  '@tap.stop="handleGoWordsAction"',
+  '@touchend.stop.prevent="handleGoWordsAction"',
   '@touchstart.stop="stopInlineEvent"',
-  'background: rgba(255, 232, 144',
+  'text-decoration: underline',
+  'text-decoration-color: #111316',
+  'text-decoration-thickness: 1px',
+  'text-underline-offset: 2px',
   'box-decoration-break: clone',
   '-webkit-box-decoration-break: clone',
+  'justify-content: center',
   ':id="sentence.id"',
   'currentTheme',
   '--reader-accent',
@@ -180,16 +207,19 @@ const requiredReaderMarkers = [
   '--reader-paper',
   '--reader-visual-start',
   '--reader-visual-end',
+  ':src="currentArticle.heroImage"',
+  'heroImage',
+  'reader-flow',
   'reader-hero__visual',
-  'background: transparent;',
+  'reader-cover__image',
+  'reader-cover__shade',
+  'reader-cover__content',
   '@tap.stop="openWord(token)"',
   'v-if="token.type === \'word\'"',
   'reader-body__token-static',
   'reader-body__token-hit',
   'hover-class="none"',
   '@longpress.stop="openSentenceTranslation(sentence, $event)"',
-  'reader-cover__art',
-  'reader-cover__symbol',
   'reader-cover__caption',
   'const readerFontSize = computed(() => `${Math.round(16 * fontScale.value)}px`)',
   'const readerLineHeight = computed(() => `${Math.round(28 * fontScale.value)}px`)',
@@ -199,11 +229,56 @@ const requiredReaderMarkers = [
   'font-size: 18px;',
   'word-sheet__tools',
   'reader-hero__eyebrow',
-  'reader-hero__deck',
+  'reader-body--centered',
+  'align-items: center',
+  'max-width: 318px',
+  'margin: 0 auto 22px',
+  'text-align: left',
 ]
 
 for (const marker of requiredReaderMarkers) {
   assert(files.reader.includes(marker), `Reader refresh marker missing: ${marker}`)
+}
+
+for (const articleImage of [
+  'src/static/articles/bugs-bright-clothes.jpg',
+  'src/static/articles/walking.jpg',
+  'src/static/articles/dreams.jpg',
+]) {
+  assert(exists(articleImage), `Article hero image missing: ${articleImage}`)
+}
+
+for (const marker of [
+  'heroImage: \'/static/articles/bugs-bright-clothes.jpg\'',
+  'heroImage: \'/static/articles/walking.jpg\'',
+  'heroImage: \'/static/articles/dreams.jpg\'',
+]) {
+  assert(files.readerArticles.includes(marker), `Feature article data missing marker: ${marker}`)
+  assert(files.readerRuntimeArticles.includes(marker), `MP-safe article data missing marker: ${marker}`)
+}
+
+const sourceDismissLayerIndex = files.reader.indexOf('class="reader-dismiss-layer"')
+const sourcePopoverIndex = files.reader.indexOf('id="reader-translation-popover"')
+assert(
+  sourceDismissLayerIndex !== -1 && sourcePopoverIndex !== -1 && sourceDismissLayerIndex < sourcePopoverIndex,
+  'Reader dismiss layer must render before translation popover so real-device taps reach popover actions'
+)
+
+const sourceSettingsPanelBlock = sliceBetween(
+  files.reader,
+  'class="reader-settings-sheet"',
+  'v-if="wordSheetVisible"',
+  'source settings panel'
+)
+for (const marker of [
+  '@tap.stop="handleFontScaleAction(option.value, $event)"',
+  '@touchend.stop.prevent="handleFontScaleAction(option.value, $event)"',
+  '@tap.stop="handleNightModeAction"',
+  '@touchend.stop.prevent="handleNightModeAction"',
+  '@tap.stop="handleGoWordsAction"',
+  '@touchend.stop.prevent="handleGoWordsAction"',
+]) {
+  assert(sourceSettingsPanelBlock.includes(marker), `Source settings panel missing real-device action marker: ${marker}`)
 }
 
 const readerDomainCombined = [
@@ -219,6 +294,8 @@ const requiredReaderDomainMarkers = [
   'export interface SentenceUnit',
   'export interface ContentBlock',
   'export const articles',
+  'heroImage: string',
+  'heroImage: \'/static/articles/bugs-bright-clothes.jpg\'',
   'level: \'CET-6\'',
   'theme: {',
   'buildContentBlocks',
@@ -345,6 +422,11 @@ const forbiddenReaderMarkers = [
   'handleUnderlineAction',
   'reader-body__english--marked',
   'reader-body__mark-line',
+  'background-image: linear-gradient(#111316, #111316);',
+  'box-shadow: inset 0 -1px 0 #111316;',
+  'box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.92);',
+  'background-size: 100% 1px;',
+  'background-position: 0 calc(100% - 2px);',
   'reader-body__translation',
   'reader-body__translation-text',
   'word-sheet__ghost',
@@ -359,6 +441,8 @@ const forbiddenReaderMarkers = [
   'importantPhraseMap',
   'markImportantPhrases',
   'reader-hero__visual-glow',
+  'reader-cover__art',
+  'reader-cover__symbol',
   'reader-toolbar',
   'reader-toolbar__rail',
   'reader-toolbar__item',
@@ -376,8 +460,6 @@ const forbiddenReaderMarkers = [
   'const reviewedPhraseMap',
   'text-decoration-line: underline',
   'text-decoration-color: #111111',
-  'text-underline-offset',
-  'text-decoration-skip-ink: none',
   'const readerFontSize = computed(() => `${Math.round(23 * fontScale.value)}px`)',
   'const readerLineHeight = computed(() => `${Math.round(38 * fontScale.value)}px`)',
   'const readerFontSize = computed(() => `${Math.round(20 * fontScale.value)}px`)',
@@ -392,14 +474,12 @@ const forbiddenReaderMarkers = [
   'font-size: 30px;',
   '.word-sheet__word {\n  font-size: 24px;',
   '.word-sheet__word {\n  font-size: 21px;',
-  '<image class="reader-cover__image"',
   '<image class="reader-page__ambient-image"',
   'filter: blur(34px)',
   'linear-gradient(90deg, var(--reader-accent)',
   'images.unsplash',
   '@touchend.stop.prevent="handleUnderlineAction"',
   '@pointerup.stop="handleUnderlineAction"',
-  '@touchend.stop.prevent="handleCopyAction"',
   '@pointerup.stop="handleCopyAction"',
   '@touchend.stop.prevent="handleShareAction"',
   '@pointerup.stop="handleShareAction"',
@@ -407,6 +487,7 @@ const forbiddenReaderMarkers = [
   '@touchstart="startLongPressTranslation(sentence, $event)"',
   'startLongPressTranslation(sentence',
   'longPressTimer',
+  'ignorePopoverActionsUntil = Date.now() + 120',
   '@mousedown.stop="startLongPressTranslation(sentence, $event)"',
   '@pointerdown.stop="startLongPressTranslation(sentence, $event)"',
   '@mouseup="cancelLongPressTranslation"',
@@ -460,9 +541,14 @@ if (files.distWxml || files.distWxss || files.distJs) {
   for (const marker of [
     'reader-body__sentence-unit',
     'catchtap',
+    'catchtouchend',
     'catchlongpress',
     'bindlongpress',
-    'reader-cover__art',
+    'reader-flow',
+    'reader-cover__image',
+    'reader-cover__shade',
+    'reader-cover__content',
+    'v2012-article-hero',
     'min-height:78px',
     'font-size:18px',
     'reader-topbar__settings',
@@ -472,11 +558,30 @@ if (files.distWxml || files.distWxss || files.distJs) {
     assert(distCombined.includes(marker), `Built WeChat output missing marker: ${marker}`)
   }
 
+  const distDismissLayerIndex = files.distWxml.indexOf('reader-dismiss-layer')
+  const distPopoverIndex = files.distWxml.indexOf('reader-translation-popover')
+  assert(
+    distDismissLayerIndex !== -1 && distPopoverIndex !== -1 && distDismissLayerIndex < distPopoverIndex,
+    'Built WeChat output must render dismiss layer before translation popover'
+  )
+
+  const distSettingsPanelBlock = sliceBetween(
+    files.distWxml,
+    'reader-settings-sheet',
+    'word-sheet',
+    'built settings panel'
+  )
+  for (const marker of ['catchtap', 'catchtouchend', '夜间模式', '生词本']) {
+    assert(distSettingsPanelBlock.includes(marker), `Built settings panel missing marker: ${marker}`)
+  }
+  assert(!distSettingsPanelBlock.includes('bindtap'), 'Built settings panel should use catchtap/catchtouchend actions, not bindtap')
+
   for (const marker of [
     'startLongPressTranslation',
     'bindtouchstart',
     'images.unsplash',
-    'reader-cover__image',
+    'reader-cover__art',
+    'reader-cover__symbol',
     'reader-page__ambient-image',
     'max-height:236px',
     'max-height:168px',
@@ -509,7 +614,7 @@ if (files.distWxml || files.distWxss || files.distJs) {
   for (const [label, content, marker] of [
     ['built mp-safe reader runtime service', files.distReaderRuntimeService, 'getReaderArticleByIndex'],
     ['built mp-safe reader runtime content', files.distReaderRuntimeContent, 'buildContentBlocks'],
-    ['built mp-safe reader runtime articles', files.distReaderRuntimeArticles, 'bugs-bright-clothes'],
+    ['built mp-safe reader runtime articles', files.distReaderRuntimeArticles, 'heroImage:"/static/articles/bugs-bright-clothes.jpg"'],
     ['built mp-safe vocabulary runtime service', files.distVocabularyRuntimeService, 'addVocabularyWord'],
   ]) {
     assert(content.includes(marker), `${label} missing or stale`)
@@ -536,8 +641,13 @@ if (files.rootWxml || files.rootWxss || files.rootJs) {
   for (const marker of [
     'reader-body__sentence-unit',
     'catchtap',
+    'catchtouchend',
     'catchlongpress',
-    'reader-cover__art',
+    'reader-flow',
+    'reader-cover__image',
+    'reader-cover__shade',
+    'reader-cover__content',
+    'v2012-article-hero',
     'min-height:78px',
     'font-size:18px',
     'reader-topbar__settings',
@@ -547,12 +657,31 @@ if (files.rootWxml || files.rootWxss || files.rootJs) {
     assert(rootMiniProgramCombined.includes(marker), `Root WeChat output missing marker: ${marker}`)
   }
 
+  const rootDismissLayerIndex = files.rootWxml.indexOf('reader-dismiss-layer')
+  const rootPopoverIndex = files.rootWxml.indexOf('reader-translation-popover')
+  assert(
+    rootDismissLayerIndex !== -1 && rootPopoverIndex !== -1 && rootDismissLayerIndex < rootPopoverIndex,
+    'Root WeChat output must render dismiss layer before translation popover'
+  )
+
+  const rootSettingsPanelBlock = sliceBetween(
+    files.rootWxml,
+    'reader-settings-sheet',
+    'word-sheet',
+    'root settings panel'
+  )
+  for (const marker of ['catchtap', 'catchtouchend', '夜间模式', '生词本']) {
+    assert(rootSettingsPanelBlock.includes(marker), `Root settings panel missing marker: ${marker}`)
+  }
+  assert(!rootSettingsPanelBlock.includes('bindtap'), 'Root settings panel should use catchtap/catchtouchend actions, not bindtap')
+
   for (const marker of [
     'images.unsplash',
     'wcard',
     'bub__',
     'lineTranslate',
-    'reader-cover__image',
+    'reader-cover__art',
+    'reader-cover__symbol',
     'reader-page__ambient-image',
     'max-height:236px',
     'max-height:168px',
@@ -582,7 +711,7 @@ if (files.rootWxml || files.rootWxss || files.rootJs) {
   for (const [label, content, marker] of [
     ['root fallback mp-safe reader runtime service', files.rootReaderRuntimeService, 'getReaderArticleByIndex'],
     ['root fallback mp-safe reader runtime content', files.rootReaderRuntimeContent, 'buildContentBlocks'],
-    ['root fallback mp-safe reader runtime articles', files.rootReaderRuntimeArticles, 'bugs-bright-clothes'],
+    ['root fallback mp-safe reader runtime articles', files.rootReaderRuntimeArticles, 'heroImage:"/static/articles/bugs-bright-clothes.jpg"'],
     ['root fallback mp-safe vocabulary runtime service', files.rootVocabularyRuntimeService, 'addVocabularyWord'],
   ]) {
     assert(content.includes(marker), `${label} missing or stale`)
