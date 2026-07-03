@@ -65,6 +65,7 @@ export function buildContentBlocks(article: Article): ContentBlock[] {
           plainText: sentenceText,
           translation: sentenceTranslation.translation,
           translationNote: sentenceTranslation.note,
+          audioUrl: sentenceTranslation.audioUrl,
         }
       }),
     }

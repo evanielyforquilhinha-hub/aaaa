@@ -2,6 +2,7 @@ export interface SentenceTranslation {
   text: string
   translation: string
   note: string
+  audioUrl?: string
 }
 
 export interface WordExplanation {
@@ -12,6 +13,7 @@ export interface WordExplanation {
   example: string
   exampleTranslation: string
   note?: string
+  audioUrl?: string
 }
 
 export interface ReviewedPhrase {

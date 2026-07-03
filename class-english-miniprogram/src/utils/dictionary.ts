@@ -5,6 +5,7 @@ export interface WordLookup {
   meaning: string
   example: string
   exampleTranslation: string
+  audioUrl?: string
 }
 
 const dictionary: Record<string, WordLookup> = {

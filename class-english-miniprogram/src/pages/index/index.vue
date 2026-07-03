@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, nextTick, onUnmounted } from 'vue'
 import { type TextToken } from '@/utils/wordParser'
 import { lookupWord, type WordLookup } from '@/utils/dictionary'
-import { speakWord, speakSentences, stopSpeech } from '@/utils/tts'
+import { playAudioUrl, speakSentencesByAudioUrls, stopSpeech } from '@/utils/tts'
 import {
   getReaderArticleByIndex,
   getReaderArticles,
@@ -13,6 +13,8 @@ import {
 } from '@/utils/readerService'
 import { addVocabularyWord } from '@/utils/vocabularyService'
 import type { SentenceUnit } from '@/features/reader/types'
+
+type AudioAvailability = 'missing' | 'ready' | 'loading' | 'playing' | 'failed'
 
 const currentIndex = ref(0)
 const articles = getReaderArticles()
@@ -41,10 +43,22 @@ const nightMode = ref(false)
 const fontScale = ref(1)
 const reading = ref(false)
 const activeSentenceIndex = ref(-1)
+const audioState = ref<AudioAvailability>('missing')
 
 const blocks = computed(() => getReaderContentBlocks(currentArticle.value))
 
 const sentences = computed(() => getReaderSentences(currentArticle.value))
+const articleAudioItems = computed(() =>
+  blocks.value
+    .flatMap((block) => block.sentences)
+    .map((sentence) => ({
+      audioUrl: sentence.audioUrl || '',
+      sentence: sentence.plainText,
+      sentenceId: sentence.id,
+    }))
+    .filter((item) => item.audioUrl),
+)
+const hasArticleAudio = computed(() => articleAudioItems.value.length > 0)
 const readerFontSize = computed(() => `${Math.round(16 * fontScale.value)}px`)
 const readerLineHeight = computed(() => `${Math.round(28 * fontScale.value)}px`)
 
@@ -139,8 +153,39 @@ function isHighlighted(token: TextToken): boolean {
   return token.type === 'word' && !!token.normalized && token.normalized === highlightedWord.value
 }
 
+function showAudioPreparingToast(title: string) {
+  audioState.value = 'missing'
+  uni.showToast({ title, icon: 'none' })
+}
+
+async function playSingleAudioUrl(url: string, unavailableTitle: string, failedTitle: string) {
+  if (!url) {
+    showAudioPreparingToast(unavailableTitle)
+    return
+  }
+
+  stopSpeech()
+  audioState.value = 'loading'
+  try {
+    await playAudioUrl(url, {
+      onStart: () => {
+        audioState.value = 'playing'
+      },
+      onEnd: () => {
+        audioState.value = 'ready'
+      },
+      onError: () => {
+        audioState.value = 'failed'
+      },
+    })
+  } catch {
+    uni.showToast({ title: failedTitle, icon: 'none' })
+  }
+}
+
 function speakSelectedWord() {
-  if (selectedLookup.value) speakWord(selectedLookup.value.word)
+  const audioUrl = selectedLookup.value?.audioUrl || ''
+  void playSingleAudioUrl(audioUrl, '单词音频稍后补充', '音频暂不可用')
 }
 
 function addSelectedWord() {
@@ -159,6 +204,7 @@ const translationVisible = ref(false)
 const translationActive = ref(false)
 const selectedSentenceText = ref('')
 const selectedSentenceId = ref('')
+const selectedSentenceAudioUrl = ref('')
 const selectedTranslation = ref('')
 const selectedTranslationNote = ref('')
 const suppressWordTapUntil = ref(0)
@@ -335,6 +381,7 @@ function openSentenceTranslation(sentence: SentenceUnit, event?: any) {
   lastPopoverActionKey = ''
   selectedSentenceId.value = sentence.id
   selectedSentenceText.value = sentence.plainText
+  selectedSentenceAudioUrl.value = sentence.audioUrl || ''
   selectedTranslation.value = sentence.translation
   selectedTranslationNote.value = sentence.translationNote
   translationActive.value = false
@@ -366,6 +413,7 @@ function closeTranslation() {
     translationVisible.value = false
     selectedSentenceId.value = ''
     selectedSentenceText.value = ''
+    selectedSentenceAudioUrl.value = ''
     selectedTranslation.value = ''
     selectedTranslationNote.value = ''
     translationBubbleStyle.value = {
@@ -396,10 +444,7 @@ function markSentenceHighlight() {
 
 async function speakSelectedSentence() {
   if (!selectedSentenceText.value.trim()) return
-  stopSpeech()
-  await speakSentences([selectedSentenceText.value], {
-    onError: () => uni.showToast({ title: '音频暂不可用', icon: 'none' }),
-  })
+  await playSingleAudioUrl(selectedSentenceAudioUrl.value, '这句音频稍后补充', '音频暂不可用')
 }
 
 function copySelectedSentence() {
@@ -481,22 +526,33 @@ async function readAloud() {
     stopSpeech()
     reading.value = false
     activeSentenceIndex.value = -1
+    audioState.value = hasArticleAudio.value ? 'ready' : 'missing'
     return
   }
+
+  if (!hasArticleAudio.value) {
+    showAudioPreparingToast('音频还在准备中')
+    return
+  }
+
   reading.value = true
+  audioState.value = 'loading'
   activeSentenceIndex.value = -1
-  await speakSentences(sentences.value, {
+  await speakSentencesByAudioUrls(articleAudioItems.value, {
     onSentenceStart: (index: number) => {
       activeSentenceIndex.value = index
+      audioState.value = 'playing'
     },
     onAllEnd: () => {
       reading.value = false
       activeSentenceIndex.value = -1
+      audioState.value = hasArticleAudio.value ? 'ready' : 'missing'
     },
     onError: () => {
       uni.showToast({ title: '音频暂不可用', icon: 'none' })
       reading.value = false
       activeSentenceIndex.value = -1
+      audioState.value = 'failed'
     },
   })
 }
@@ -510,8 +566,16 @@ function goWords() {
   uni.switchTab({ url: '/pages/words/words' })
 }
 
+function resetAudioPlaybackState() {
+  stopSpeech()
+  reading.value = false
+  activeSentenceIndex.value = -1
+  audioState.value = 'missing'
+}
+
 function previousArticle() {
   if (currentIndex.value === 0) return
+  resetAudioPlaybackState()
   closeTranslation()
   closeWordSheet()
   closeSettingsPanel()
@@ -520,6 +584,7 @@ function previousArticle() {
 
 function nextArticle() {
   if (currentIndex.value >= articles.length - 1) return
+  resetAudioPlaybackState()
   closeTranslation()
   closeWordSheet()
   closeSettingsPanel()
@@ -561,8 +626,20 @@ onUnmounted(() => {
           >
             <text class="reader-topbar__settings-icon">Aa</text>
           </view>
-          <view class="reader-topbar__action" @tap="readAloud">
-            <text class="reader-topbar__icon">{{ reading ? '■' : '♫' }}</text>
+          <view
+            class="reader-topbar__action reader-audio-button"
+            :class="{
+              'reader-audio-button--playing': reading,
+              'reader-audio-button--loading': audioState === 'loading',
+              'reader-audio-button--unavailable': !hasArticleAudio,
+            }"
+            @tap="readAloud"
+          >
+            <view class="reader-audio-icon" :class="{ 'reader-audio-icon--muted': !hasArticleAudio }">
+              <view class="reader-audio-icon__body" />
+              <view class="reader-audio-icon__wave reader-audio-icon__wave--one" />
+              <view class="reader-audio-icon__wave reader-audio-icon__wave--two" />
+            </view>
           </view>
           <view class="reader-topbar__action" :class="{ disabled: currentIndex === articles.length - 1 }" @tap="nextArticle">
             <text class="reader-topbar__icon">›</text>
@@ -656,7 +733,6 @@ onUnmounted(() => {
                       class="reader-body__token reader-body__token-static"
                     >{{ token.text }}</text>
                   </block>
-                  <text class="reader-body__play-mark">▸</text>
                 </view>
               </view>
             </view>
@@ -715,6 +791,11 @@ onUnmounted(() => {
           @tap.stop="handleSentenceSpeakAction"
           @touchend.stop.prevent="handleSentenceSpeakAction"
         >
+          <view class="reader-sentence-popover__action-icon reader-audio-icon">
+            <view class="reader-audio-icon__body" />
+            <view class="reader-audio-icon__wave reader-audio-icon__wave--one" />
+            <view class="reader-audio-icon__wave reader-audio-icon__wave--two" />
+          </view>
           <text>朗读</text>
         </view>
         <view
@@ -802,7 +883,11 @@ onUnmounted(() => {
         </view>
         <view class="word-sheet__tools">
           <view class="word-sheet__speak" @tap="speakSelectedWord">
-            <text class="word-sheet__speak-icon">♪</text>
+            <view class="word-sheet__speak-icon reader-audio-icon" :class="{ 'reader-audio-icon--muted': !selectedLookup?.audioUrl }">
+              <view class="reader-audio-icon__body" />
+              <view class="reader-audio-icon__wave reader-audio-icon__wave--one" />
+              <view class="reader-audio-icon__wave reader-audio-icon__wave--two" />
+            </view>
           </view>
         </view>
       </view>
@@ -898,6 +983,85 @@ onUnmounted(() => {
 .reader-topbar__settings {
   background: rgba(255, 255, 255, 0.54);
   box-shadow: 0 8px 18px rgba(28, 31, 36, 0.08);
+}
+
+.reader-audio-button {
+  background: rgba(255, 255, 255, 0.58);
+  color: #303235;
+  box-shadow: 0 8px 18px rgba(28, 31, 36, 0.08);
+  transition: background-color 0.18s ease, color 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.reader-audio-button--playing {
+  background: var(--reader-accent);
+  color: #fff;
+}
+
+.reader-audio-button--loading {
+  opacity: 0.82;
+}
+
+.reader-audio-button--unavailable {
+  opacity: 0.72;
+}
+
+.reader-audio-icon {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.reader-audio-icon__body {
+  position: absolute;
+  left: 3px;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.reader-audio-icon__wave {
+  position: absolute;
+  top: 5px;
+  border: 2px solid currentColor;
+  border-left: 0;
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 0 14px 14px 0;
+}
+
+.reader-audio-icon__wave--one {
+  left: 10px;
+  width: 5px;
+  height: 10px;
+}
+
+.reader-audio-icon__wave--two {
+  left: 13px;
+  width: 7px;
+  height: 10px;
+  opacity: 0.58;
+}
+
+.reader-audio-icon--muted .reader-audio-icon__wave--two {
+  opacity: 0;
+}
+
+.reader-audio-icon--muted::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 3px;
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(42deg);
+  transform-origin: center;
 }
 
 .reader-topbar__settings.active {
@@ -1228,12 +1392,6 @@ onUnmounted(() => {
   color: #fff;
 }
 
-.reader-body__play-mark {
-  margin-left: 4px;
-  font-size: 12px;
-  color: var(--reader-accent);
-}
-
 .reader-sentence-popover {
   position: fixed;
   z-index: 220;
@@ -1351,6 +1509,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   text-align: center;
   border-radius: 15px;
   background: transparent;
@@ -1358,6 +1517,35 @@ onUnmounted(() => {
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
   @include tap-feedback;
+}
+
+.reader-sentence-popover__action-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.reader-sentence-popover__action-icon .reader-audio-icon__body {
+  left: 2px;
+  top: 5px;
+  width: 5px;
+  height: 5px;
+}
+
+.reader-sentence-popover__action-icon .reader-audio-icon__wave {
+  top: 3px;
+  border-width: 1px;
+}
+
+.reader-sentence-popover__action-icon .reader-audio-icon__wave--one {
+  left: 8px;
+  width: 4px;
+  height: 9px;
+}
+
+.reader-sentence-popover__action-icon .reader-audio-icon__wave--two {
+  left: 10px;
+  width: 5px;
+  height: 9px;
 }
 
 .reader-sentence-popover__action:first-child {
@@ -1652,20 +1840,44 @@ onUnmounted(() => {
 }
 
 .word-sheet__speak {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: 18px;
   background: #f2f6ef;
   color: var(--reader-accent);
   @include tap-feedback;
 }
 
 .word-sheet__speak-icon {
-  font-size: 22px;
-  font-weight: 700;
+  width: 18px;
+  height: 18px;
+}
+
+.word-sheet__speak-icon .reader-audio-icon__body {
+  left: 2px;
+  top: 6px;
+  width: 6px;
+  height: 6px;
+}
+
+.word-sheet__speak-icon .reader-audio-icon__wave {
+  top: 4px;
+  border-width: 2px;
+}
+
+.word-sheet__speak-icon .reader-audio-icon__wave--one {
+  left: 9px;
+  width: 5px;
+  height: 10px;
+}
+
+.word-sheet__speak-icon .reader-audio-icon__wave--two {
+  left: 12px;
+  width: 6px;
+  height: 10px;
 }
 
 .word-sheet__meaning {

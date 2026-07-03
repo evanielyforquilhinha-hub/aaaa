@@ -39,6 +39,7 @@ export interface SentenceUnit {
   plainText: string
   translation: string
   translationNote: string
+  audioUrl?: string
 }
 
 export interface ContentBlock {
